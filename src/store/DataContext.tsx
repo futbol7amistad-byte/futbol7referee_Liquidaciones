@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Match, MatchPayment, Referee, Team, CashDelivery, Sanction } from '../types';
-import { mockMatches, mockPayments, mockReferees, mockTeams, mockDeliveries, mockSanctions } from './mockData';
+import { db } from '../lib/firebase';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query } from 'firebase/firestore';
 
 interface DataContextType {
   matches: Match[];
@@ -41,150 +42,83 @@ export interface AppSettings {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
-  const [matches, setMatches] = useState<Match[]>(() => {
-    const saved = localStorage.getItem('app_matches');
-    return saved ? JSON.parse(saved) : mockMatches;
-  });
-  const [payments, setPayments] = useState<MatchPayment[]>(() => {
-    const saved = localStorage.getItem('app_payments');
-    return saved ? JSON.parse(saved) : mockPayments;
-  });
-  const [referees, setReferees] = useState<Referee[]>(() => {
-    const saved = localStorage.getItem('app_referees');
-    const parsed = saved ? JSON.parse(saved) : [];
-    return parsed.length > 0 ? parsed : mockReferees;
-  });
-  const [teams, setTeams] = useState<Team[]>(() => {
-    const saved = localStorage.getItem('app_teams');
-    return saved ? JSON.parse(saved) : mockTeams;
-  });
-  const [deliveries, setDeliveries] = useState<CashDelivery[]>(() => {
-    const saved = localStorage.getItem('app_deliveries');
-    return saved ? JSON.parse(saved) : mockDeliveries;
-  });
-  const [sanctions, setSanctions] = useState<Sanction[]>(() => {
-    const saved = localStorage.getItem('app_sanctions');
-    return saved ? JSON.parse(saved) : mockSanctions;
-  });
-  const [settings, setSettings] = useState<AppSettings>(() => {
-    const saved = localStorage.getItem('app_settings');
-    return saved ? JSON.parse(saved) : {
-      logo_url: '',
-      theme: 'light',
-      season: '2025-2026'
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [payments, setPayments] = useState<MatchPayment[]>([]);
+  const [referees, setReferees] = useState<Referee[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [deliveries, setDeliveries] = useState<CashDelivery[]>([]);
+  const [sanctions, setSanctions] = useState<Sanction[]>([]);
+  const [settings, setSettings] = useState<AppSettings>({ logo_url: '', theme: 'light', season: '2025-2026' });
+  const [hiddenPeriods, setHiddenPeriods] = useState<string[]>([]);
+
+  useEffect(() => {
+    const unsubMatches = onSnapshot(collection(db, 'matches'), (snapshot) => {
+      setMatches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match)));
+    });
+    const unsubPayments = onSnapshot(collection(db, 'payments'), (snapshot) => {
+      setPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MatchPayment)));
+    });
+    const unsubReferees = onSnapshot(collection(db, 'referees'), (snapshot) => {
+      setReferees(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Referee)));
+    });
+    const unsubTeams = onSnapshot(collection(db, 'teams'), (snapshot) => {
+      setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
+    });
+    const unsubDeliveries = onSnapshot(collection(db, 'deliveries'), (snapshot) => {
+      setDeliveries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CashDelivery)));
+    });
+    const unsubSanctions = onSnapshot(collection(db, 'sanctions'), (snapshot) => {
+      setSanctions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sanction)));
+    });
+
+    return () => {
+      unsubMatches();
+      unsubPayments();
+      unsubReferees();
+      unsubTeams();
+      unsubDeliveries();
+      unsubSanctions();
     };
-  });
-  const [hiddenPeriods, setHiddenPeriods] = useState<string[]>(() => {
-    const saved = localStorage.getItem('app_hidden_periods');
-    return saved ? JSON.parse(saved) : [];
-  });
+  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('app_matches', JSON.stringify(matches));
-  }, [matches]);
-
-  useEffect(() => {
-    localStorage.setItem('app_payments', JSON.stringify(payments));
-  }, [payments]);
-
-  useEffect(() => {
-    localStorage.setItem('app_referees', JSON.stringify(referees));
-  }, [referees]);
-
-  useEffect(() => {
-    localStorage.setItem('app_teams', JSON.stringify(teams));
-  }, [teams]);
-
-  useEffect(() => {
-    localStorage.setItem('app_deliveries', JSON.stringify(deliveries));
-  }, [deliveries]);
-
-  useEffect(() => {
-    localStorage.setItem('app_sanctions', JSON.stringify(sanctions));
-  }, [sanctions]);
-
-  useEffect(() => {
-    localStorage.setItem('app_settings', JSON.stringify(settings));
-    if (settings.theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [settings]);
-
-  const addPayment = (payment: Omit<MatchPayment, 'id' | 'created_at'>) => {
-    const newPayment: MatchPayment = {
+  const addPayment = async (payment: Omit<MatchPayment, 'id' | 'created_at'>) => {
+    await addDoc(collection(db, 'payments'), {
       ...payment,
-      id: `p${Date.now()}`,
       created_at: new Date().toISOString(),
-    };
-    setPayments(prev => [...prev.filter(p => !(p.match_id === payment.match_id && p.team_id === payment.team_id)), newPayment]);
+    });
   };
 
-  const addDelivery = (delivery: Omit<CashDelivery, 'id' | 'created_at'>) => {
-    const newDelivery: CashDelivery = {
+  const addDelivery = async (delivery: Omit<CashDelivery, 'id' | 'created_at'>) => {
+    await addDoc(collection(db, 'deliveries'), {
       ...delivery,
-      id: `d${Date.now()}`,
       created_at: new Date().toISOString(),
-    };
-    setDeliveries(prev => [...prev, newDelivery]);
+    });
   };
 
-  const addReferee = (referee: Omit<Referee, 'id'>) => {
-    const newReferee: Referee = {
-      ...referee,
-      id: `r${Date.now()}`,
-    };
-    setReferees(prev => [...prev, newReferee]);
+  const addReferee = async (referee: Omit<Referee, 'id'>) => {
+    await addDoc(collection(db, 'referees'), referee);
   };
 
-  const updateReferee = (id: string, data: Partial<Referee>) => {
-    setReferees(prev => prev.map(r => r.id === id ? { ...r, ...data } : r));
+  const updateReferee = async (id: string, data: Partial<Referee>) => {
+    await updateDoc(doc(db, 'referees', id), data);
   };
 
-  const deleteReferee = (id: string) => {
-    setReferees(prev => prev.filter(r => r.id !== id));
+  const deleteReferee = async (id: string) => {
+    await deleteDoc(doc(db, 'referees', id));
   };
 
-  const addSanction = (sanction: Omit<Sanction, 'id' | 'created_at' | 'is_paid'>) => {
-    const newSanction: Sanction = {
+  const addSanction = async (sanction: Omit<Sanction, 'id' | 'created_at' | 'is_paid'>) => {
+    await addDoc(collection(db, 'sanctions'), {
       ...sanction,
-      id: `s${Date.now()}`,
       is_paid: false,
       created_at: new Date().toISOString(),
-    };
-    setSanctions(prev => [...prev, newSanction]);
-    
-    // Update team stats
-    setTeams(prev => prev.map(t => {
-      if (t.id === sanction.team_id) {
-        return {
-          ...t,
-          total_sanctions: t.total_sanctions + 1,
-          pending_amount: t.pending_amount + sanction.amount
-        };
-      }
-      return t;
-    }));
+    });
   };
 
-  const markSanctionAsPaid = (id: string) => {
-    const sanction = sanctions.find(s => s.id === id);
-    if (!sanction) return;
-
-    setSanctions(prev => prev.map(s => s.id === id ? { ...s, is_paid: true } : s));
-    
-    // Update team stats
-    setTeams(prev => prev.map(t => {
-      if (t.id === sanction.team_id) {
-        return {
-          ...t,
-          pending_amount: Math.max(0, t.pending_amount - sanction.amount)
-        };
-      }
-      return t;
-    }));
+  const markSanctionAsPaid = async (id: string) => {
+    await updateDoc(doc(db, 'sanctions', id), { is_paid: true });
   };
+
 
   const clearSanctions = () => {
     setSanctions([]);
