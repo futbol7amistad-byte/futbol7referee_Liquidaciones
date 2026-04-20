@@ -1,0 +1,5 @@
+{
+  "name": "Gestión Árbitros Fútbol 7",
+  "description": "Aplicación para la gestión de árbitros, partidos y pagos de campeonatos de Fútbol 7 amateur.",
+  "requestFramePermissions": []
+}
