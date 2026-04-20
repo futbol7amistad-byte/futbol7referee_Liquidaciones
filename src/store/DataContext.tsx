@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Match, MatchPayment, Referee, Team, CashDelivery, Sanction } from '../types';
 import { db } from '../lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, setDoc, writeBatch, getDocs } from 'firebase/firestore';
 
 interface DataContextType {
   matches: Match[];
@@ -125,7 +125,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setTeams(prev => prev.map(t => ({ ...t, total_sanctions: 0, pending_amount: 0 })));
   };
 
-  const importMatches = (newMatches: any[], period: string, startDate: string, endDate: string) => {
+  const importMatches = async (newMatches: any[], period: string, startDate: string, endDate: string) => {
     const generateInitialPassword = () => {
       const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
       const numbers = '0123456789';
@@ -137,173 +137,122 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       return firstLetter + rest;
     };
 
-    // 1. Calculate next state for teams
-    const nextTeams = [...teams];
-    newMatches.forEach(m => {
-      const nameA = String(m.team_a_name || '').trim();
-      const nameB = String(m.team_b_name || '').trim();
-
-      if (nameA && !nextTeams.some(t => t.name.toLowerCase() === nameA.toLowerCase())) {
-        nextTeams.push({
-          id: `t-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: nameA,
-          contact_phone: '',
-          total_sanctions: 0,
-          pending_amount: 0
-        });
-      }
-      if (nameB && !nextTeams.some(t => t.name.toLowerCase() === nameB.toLowerCase())) {
-        nextTeams.push({
-          id: `t-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: nameB,
-          contact_phone: '',
-          total_sanctions: 0,
-          pending_amount: 0
-        });
-      }
-    });
-
-    // 2. Calculate next state for referees
-    const nextReferees = [...referees];
-    newMatches.forEach(m => {
-      const refName = String(m.referee_name || '').trim();
-      if (refName && refName !== 'SIN ASIGNAR') {
-        if (!nextReferees.some(r => r.name.toLowerCase() === refName.toLowerCase())) {
-          const refereeId = `r-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          nextReferees.push({
-            id: refereeId,
-            name: refName,
-            username: refName.toUpperCase().replace(/\s/g, ''),
-            password: generateInitialPassword(),
-            email: `${refName.toLowerCase().replace(/\s/g, '')}@example.com`,
-            role: 'referee',
-            category: 'Primera',
-            status: 'active',
-            phone: ''
-          });
-        }
-      }
-    });
-
-    // 3. Calculate next state for matches
-    const formattedMatches: Match[] = newMatches
-      .filter(m => String(m.team_a_name || '').trim() && String(m.team_b_name || '').trim())
-      .map((m, index) => {
-        const nameA = String(m.team_a_name || '').trim();
-        const nameB = String(m.team_b_name || '').trim();
-        const refName = String(m.referee_name || '').trim();
-
-      const teamAId = nextTeams.find(t => t.name.toLowerCase() === nameA.toLowerCase())?.id || 'unknown';
-      const teamBId = nextTeams.find(t => t.name.toLowerCase() === nameB.toLowerCase())?.id || 'unknown';
-      const refereeId = nextReferees.find(r => r.name.toLowerCase() === refName.toLowerCase())?.id || 'r-unassigned';
-
-      return {
-        id: `m-${Date.now()}-${index}`,
-        match_round: m.match_round,
-        match_date: m.match_date,
-        match_time: m.match_time,
-        day_name: m.day_name,
-        field: m.field,
-        competition: m.competition,
-        team_a_id: teamAId,
-        team_b_id: teamBId,
-        referee_id: refereeId,
-        status: 'Programado',
-        period: period
-      };
-    });
-
-    // 4. Update all states
-    setTeams(nextTeams.sort((a, b) => a.name.localeCompare(b.name)));
-    setReferees(nextReferees.sort((a, b) => a.name.localeCompare(b.name)));
+    const batch = writeBatch(db);
     
-    // Ensure the new period is NOT hidden
-    showPeriod(period);
+    // Fetch snapshot of current teams and referees for accurate duplicate checking
+    const teamsSnapshot = await getDocs(collection(db, 'teams'));
+    const currentTeams = teamsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
+    const refsSnapshot = await getDocs(collection(db, 'referees'));
+    const currentRefs = refsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
 
-    setMatches(prev => {
-      // Clear matches in range
-      const clearedMatches = prev.filter(m => {
-        const matchDate = m.match_date;
-        return matchDate < startDate || matchDate > endDate;
-      });
-      // Append new matches
-      const nextMatches = [...clearedMatches, ...formattedMatches].sort((a, b) => {
-        const dateCompare = a.match_date.localeCompare(b.match_date);
-        if (dateCompare !== 0) return dateCompare;
-        const fieldCompare = a.field.localeCompare(b.field);
-        if (fieldCompare !== 0) return fieldCompare;
-        return a.match_time.localeCompare(b.match_time);
-      });
-      localStorage.setItem('app_matches', JSON.stringify(nextMatches));
-      return nextMatches;
-    });
+    const teamsToMap = [...currentTeams];
+    const refsToMap = [...currentRefs];
+
+    // 1 & 2. Identify and add teams and referees
+    for (const m of newMatches) {
+        const teamNames = [String(m.team_a_name || '').trim(), String(m.team_b_name || '').trim()].filter(Boolean);
+        for (const name of teamNames) {
+            if (!teamsToMap.some(t => t.name.toLowerCase() === name.toLowerCase())) {
+                const docRef = doc(collection(db, 'teams'));
+                batch.set(docRef, { name, contact_phone: '', total_sanctions: 0, pending_amount: 0 });
+                teamsToMap.push({ id: docRef.id, name });
+            }
+        }
+
+        const refName = String(m.referee_name || '').trim();
+        if (refName && refName !== 'SIN ASIGNAR' && !refsToMap.some(r => r.name.toLowerCase() === refName.toLowerCase())) {
+            const docRef = doc(collection(db, 'referees'));
+            batch.set(docRef, {
+                name: refName,
+                username: refName.toUpperCase().replace(/\s/g, ''),
+                password: generateInitialPassword(),
+                email: `${refName.toLowerCase().replace(/\s/g, '')}@example.com`,
+                role: 'referee',
+                category: 'Primera',
+                status: 'active',
+                phone: ''
+            });
+            refsToMap.push({ id: docRef.id, name: refName });
+        }
+    }
+
+    // 3. Add matches
+    for (const m of newMatches.filter(m => String(m.team_a_name || '').trim() && String(m.team_b_name || '').trim())) {
+        const teamAId = teamsToMap.find(t => t.name.toLowerCase() === String(m.team_a_name || '').trim().toLowerCase())?.id || 'unknown';
+        const teamBId = teamsToMap.find(t => t.name.toLowerCase() === String(m.team_b_name || '').trim().toLowerCase())?.id || 'unknown';
+        const refereeId = refsToMap.find(r => r.name.toLowerCase() === String(m.referee_name || '').trim().toLowerCase())?.id || 'r-unassigned';
+
+        batch.set(doc(collection(db, 'matches')), {
+            match_round: m.match_round,
+            match_date: m.match_date,
+            match_time: m.match_time,
+            day_name: m.day_name,
+            field: m.field,
+            competition: m.competition,
+            team_a_id: teamAId,
+            team_b_id: teamBId,
+            referee_id: refereeId,
+            status: 'Programado',
+            period: period
+        });
+    }
+
+    await batch.commit();
+    showPeriod(period);
   };
 
 
-  const addTeam = (name: string) => {
-    const id = `t-${Date.now()}`;
-    setTeams(prev => [...prev, {
-      id,
+  const addTeam = async (name: string) => {
+    const docRef = await addDoc(collection(db, 'teams'), {
       name,
       contact_phone: '',
       total_sanctions: 0,
       pending_amount: 0
-    }].sort((a, b) => a.name.localeCompare(b.name)));
-    return id;
-  };
-
-  const reassignReferee = (matchId: string, refereeId: string) => {
-    console.log('reassignReferee called in DataContext');
-    console.log('matchId:', matchId);
-    console.log('refereeId:', refereeId);
-    setMatches(prev => {
-      const nextMatches = prev.map(m => m.id === matchId ? { ...m, referee_id: refereeId } : m);
-      console.log('Matches updated:', nextMatches.find(m => m.id === matchId));
-      return nextMatches;
     });
+    return docRef.id;
   };
 
-  const clearMatchesInRange = (startDate: string, endDate: string) => {
-    setMatches(prev => prev.filter(m => {
-      const matchDate = m.match_date;
-      return matchDate < startDate || matchDate > endDate;
-    }));
+  const reassignReferee = async (matchId: string, refereeId: string) => {
+    await updateDoc(doc(db, 'matches', matchId), { referee_id: refereeId });
   };
 
-  const deleteMatch = (id: string) => {
-    setMatches(prev => prev.filter(m => m.id !== id));
+  const clearMatchesInRange = async (startDate: string, endDate: string) => {
+    const matchesToDelete = matches.filter(m => {
+        const matchDate = m.match_date;
+        return matchDate >= startDate && matchDate <= endDate;
+    });
+    for (const match of matchesToDelete) {
+        await deleteDoc(doc(db, 'matches', match.id));
+    }
+  };
+
+  const deleteMatch = async (id: string) => {
+    await deleteDoc(doc(db, 'matches', id));
+  };
+  
+  const clearAllMatches = async () => {
+    for (const match of matches) {
+      await deleteDoc(doc(db, 'matches', match.id));
+    }
   };
 
   const hidePeriod = (period: string) => {
-    setHiddenPeriods(prev => {
-      const next = [...prev, period];
-      localStorage.setItem('app_hidden_periods', JSON.stringify(next));
-      return next;
-    });
+    setHiddenPeriods(prev => [...prev, period]);
   };
   const showPeriod = (period: string) => {
-    setHiddenPeriods(prev => {
-      const next = prev.filter(p => p !== period);
-      localStorage.setItem('app_hidden_periods', JSON.stringify(next));
-      return next;
-    });
+    setHiddenPeriods(prev => prev.filter(p => p !== period));
   };
 
   const clearMatchesByPeriod = (period: string) => {
     hidePeriod(period);
   };
 
-  const clearAllMatches = () => {
-    setMatches([]);
-    localStorage.setItem('app_matches', '[]');
-  };
-
   const updateSettings = (newSettings: Partial<AppSettings>) => {
     setSettings(prev => ({ ...prev, ...newSettings }));
   };
 
-  const updateMatchStatus = (matchId: string, status: 'Programado' | 'Liquidado') => {
-    setMatches(prev => prev.map(m => m.id === matchId ? { ...m, status } : m));
+  const updateMatchStatus = async (matchId: string, status: 'Programado' | 'Liquidado') => {
+    await updateDoc(doc(db, 'matches', matchId), { status });
   };
 
   return (
