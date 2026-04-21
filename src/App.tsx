@@ -15,6 +15,7 @@ import AdminTeams from './components/admin/AdminTeams';
 import AdminCalendar from './components/admin/AdminCalendar';
 import AdminUnpaid from './components/admin/AdminUnpaid';
 import AdminPayments from './components/admin/AdminPayments';
+import AdminEquity from './components/admin/AdminEquity';
 import AdminSettings from './components/admin/AdminSettings';
 import RefereeLayout from './components/referee/RefereeLayout';
 import RefereeMatches from './components/referee/RefereeMatches';
@@ -53,6 +54,7 @@ function AppRoutes() {
               <Route path="/teams" element={<AdminTeams />} />
               <Route path="/calendar" element={<AdminCalendar />} />
               <Route path="/payments" element={<AdminPayments />} />
+              <Route path="/equity" element={<AdminEquity />} />
               <Route path="/settings" element={<AdminSettings />} />
             </Routes>
           </AdminLayout>

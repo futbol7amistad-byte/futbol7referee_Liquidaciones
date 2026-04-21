@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { useData } from '../../store/DataContext';
-import { Plus, Search, Edit2, Trash2, User, Upload, Sparkles, X, ChevronDown } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, User, Upload, Sparkles, X, ChevronDown, MessageCircle } from 'lucide-react';
 import { Referee } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { fileToBase64 } from '../../utils/imageUtils';
@@ -128,6 +128,29 @@ export default function AdminReferees() {
                     </td>
                     <td className="px-6 py-5 whitespace-nowrap text-right">
                       <div className="flex justify-end gap-2">
+                        <a
+                          href={`https://wa.me/${referee.phone?.replace(/\s+/g, '')}?text=${encodeURIComponent(`Hola ${referee.name}, aquí tienes tus credenciales para acceder a la app:
+
+*Usuario*: ${referee.username.toUpperCase()}
+*Contraseña*: ${referee.password || 'Sin contraseña'}
+
+*Guía de acceso y uso:*
+1. Accede aquí: https://futbol7referee-liquidaciones.vercel.app/
+2. Introduce tu *Usuario* y *Contraseña*.
+3. Una vez en el panel, comprueba o selecciona el *Periodo* correcto.
+4. Despliega el día de tus partidos y verifica que son los correctos.
+5. Selecciona "PAGADO" si abonan en campo, o indica el motivo del impago (Transferencia, Olvido, Otros) por cada equipo.
+6. Pulsa "Guardar y Finalizar". El partido pasará de estado "Pendiente" a "Liquidado".
+7. *¿Error?* Si te equivocas, pulsa el botón "Editar", corrige los datos y vuelve a "Guardar y Finalizar".
+
+*Tip*: Añade este enlace a la pantalla de inicio de tu móvil para acceder siempre directamente.`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-10 h-10 flex items-center justify-center text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-all border border-emerald-200 shadow-sm hover:shadow-md"
+                          title="Enviar credenciales y tutorial detallado por WhatsApp"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                        </a>
                         <button 
                           onClick={() => handleOpenModal(referee)}
                           className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100 shadow-sm hover:shadow-md"

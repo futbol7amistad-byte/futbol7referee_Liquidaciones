@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../store/DataContext';
-import { LogOut, LayoutDashboard, Users, Shield, Banknote, Calendar, Settings, Trophy } from 'lucide-react';
+import { LogOut, LayoutDashboard, Users, Shield, Banknote, Calendar, Settings, Trophy, BarChart2 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import Footer from '../Footer';
 import { formatDateDisplay } from '../../utils/formatters';
@@ -35,6 +35,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Árbitros', href: '/admin/referees', icon: Users },
     { name: 'Equipos', href: '/admin/teams', icon: Shield },
     { name: 'Gestión Liquidaciones', href: '/admin/payments', icon: Banknote },
+    { name: 'Equidad', href: '/admin/equity', icon: BarChart2 },
     { name: 'Calendario', href: '/admin/calendar', icon: Calendar },
     { name: 'Configuración', href: '/admin/settings', icon: Settings },
   ];
@@ -45,7 +46,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       case 'Árbitros': return 'text-purple-500';
       case 'Equipos': return 'text-blue-500';
       case 'Gestión Liquidaciones': return 'text-emerald-500';
-      case 'Calendario': return 'text-amber-500';
+      case 'Equidad': return 'text-amber-500';
+      case 'Calendario': return 'text-sky-500';
       case 'Configuración': return 'text-slate-500';
       default: return 'text-slate-400';
     }

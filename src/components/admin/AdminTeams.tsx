@@ -148,7 +148,7 @@ export default function AdminTeams() {
                                 className="inline-flex items-center px-5 py-2.5 bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-red-100 hover:bg-red-700 transition-all active:scale-95"
                               >
                                 <AlertTriangle className="w-3.5 h-3.5 mr-2" />
-                                Multar
+                                Sancionar
                               </button>
                             </td>
                           </tr>
@@ -264,7 +264,7 @@ export default function AdminTeams() {
                     <Shield className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Infractor identificado:</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Equipo sancionado:</p>
                     <p className="text-base font-black text-slate-900 uppercase tracking-tight leading-none">{selectedTeam.name}</p>
                   </div>
                 </div>
@@ -352,7 +352,7 @@ function SanctionForm({ onCancel, onSave }: { onCancel: () => void, onSave: (dat
         </div>
 
         <div>
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Jornada Fiscal</label>
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Jornada</label>
           <input
             type="number"
             className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-300 shadow-app-inner"
@@ -386,7 +386,7 @@ function SanctionForm({ onCancel, onSave }: { onCancel: () => void, onSave: (dat
           onClick={() => onSave({ amount: parseFloat(amount), round: parseInt(round), date })}
           className="flex-1 py-4 bg-red-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-red-100 hover:bg-red-700 transition-all active:scale-95"
         >
-          Certificar Sanción
+          Confirmar Sanción
         </button>
       </div>
     </div>
