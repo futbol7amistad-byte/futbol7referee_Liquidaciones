@@ -124,13 +124,19 @@ export default function AdminPayments() {
          const effectivePayment = unpaidPayment || paidPayment;
          const rawMotivo = effectivePayment?.reason || 'Transferencia';
 
+         let displayMotivo = (rawMotivo === 'Liquidación Administrador' ? 'Transferencia' : rawMotivo);
+         if (paidPayment) {
+            displayMotivo = 'Metálico';
+         }
+
          return {
            ...item,
            pagado: !!paidPayment,
            fechaPago: paidPayment?.created_at ? format(new Date(paidPayment.created_at), 'dd/MM/yyyy') : '',
-           motivo: rawMotivo === 'Liquidación Administrador' ? 'Transferencia' : rawMotivo
+           motivo: displayMotivo
          }
-      });
+      })
+      .filter(item => !item.pagado);
   }, [matches, payments, teams, referees]);
 
   const handleLiquidate = (item: any) => {
@@ -196,11 +202,11 @@ export default function AdminPayments() {
                   <td className="px-6 py-4 border-b border-slate-50 text-center">
                     <div className="flex justify-center items-center gap-2">
                       <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{i.motivo}</span>
-                      {i.motivo && i.motivo !== 'Transferencia' && (
+                      {i.motivo && (i.motivo === 'Olvido' || i.motivo === 'Otros') && (
                         <div className="group relative">
                           <AlertCircle className="w-3.5 h-3.5 text-amber-500 cursor-help animate-pulse" />
                           <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-32 bg-slate-900 text-white text-[10px] py-2 px-3 rounded-xl shadow-xl text-center z-30 font-black tracking-tight uppercase border border-white/10 backdrop-blur-md">
-                            Especial seguimiento
+                            Seguimiento especial
                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
                           </div>
                         </div>
@@ -447,15 +453,21 @@ export default function AdminPayments() {
                                 const paymentB = payments.find(p => p.match_id === m.id && p.team_id === m.team_b_id);
                                 const totalPagado = (paymentA?.is_paid ? 35 : 0) + (paymentB?.is_paid ? 35 : 0);
 
+                                // Determinar estado de liquidación para el equipo
+                                const getTeamColor = (payment: any) => {
+                                  if (m.status !== 'Liquidado') return 'text-slate-900';
+                                  return payment?.is_paid ? 'text-emerald-600' : 'text-red-500';
+                                };
+
                                 return (
                                   <div key={m.id} className="flex justify-between items-center p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
                                     <div className="flex flex-col">
                                       <div className="flex items-center gap-2">
                                         <span className="text-[10px] font-black text-slate-900 border-r border-slate-100 pr-2 leading-none">{m.match_time}</span>
                                         <div className="flex items-center gap-1.5 text-[11px] font-bold">
-                                          <span className={paymentA?.is_paid ? 'text-slate-900' : 'text-red-500'}>{teamA}</span>
+                                          <span className={getTeamColor(paymentA)}>{teamA}</span>
                                           <span className="text-slate-300 font-black">VS</span>
-                                          <span className={paymentB?.is_paid ? 'text-slate-900' : 'text-red-500'}>{teamB}</span>
+                                          <span className={getTeamColor(paymentB)}>{teamB}</span>
                                         </div>
                                       </div>
                                       <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest mt-1">{m.field}</span>
@@ -491,7 +503,7 @@ export default function AdminPayments() {
           </button>
           {isResumenOpen && (
             <div className="p-6 pt-0 border-t border-slate-50 space-y-4">
-              {referees.map(ref => {
+              {[...referees].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())).map(ref => {
                 const refMatches = filteredMatches.filter(m => m.referee_id === ref.id);
                 const liquidatedMatches = refMatches.filter(m => m.status === 'Liquidado');
                 const totalAmount = payments
@@ -499,6 +511,10 @@ export default function AdminPayments() {
                   .reduce((sum, p) => sum + p.amount, 0);
                 const isExpanded = expandedRefereeId === ref.id;
                 const delivery = deliveries.find(d => d.referee_id === ref.id && d.period === selectedPeriod && d.amount >= totalAmount);
+                
+                // Determinar si es Liquidación Parcial o Total
+                const hasLiquidatedMatches = liquidatedMatches.length > 0;
+                const isTotalLiquidation = hasLiquidatedMatches && refMatches.every(m => m.status === 'Liquidado');
                 
                 return (
                   <div key={ref.id} className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
@@ -515,8 +531,12 @@ export default function AdminPayments() {
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-right mr-2">
+                           <span className="text-[10px] font-black text-slate-300 uppercase leading-none block">
+                             {hasLiquidatedMatches
+                               ? (isTotalLiquidation ? 'Liquidación Total' : 'Liquidación Parcial') 
+                               : ''}
+                           </span>
                            <span className="text-base font-black text-slate-900 block leading-none">{totalAmount.toFixed(2)}€</span>
-                           <span className="text-[9px] font-black text-slate-300 uppercase leading-none">Generado</span>
                         </div>
                         <button className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all shadow-sm ${isExpanded ? 'text-white bg-indigo-600' : 'text-slate-400 bg-white hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 border border-slate-100'}`} onClick={() => setExpandedRefereeId(isExpanded ? null : ref.id)}>
                           <Eye className="w-5 h-5" />
@@ -560,14 +580,20 @@ export default function AdminPayments() {
                                     const paymentA = payments.find(p => p.match_id === m.id && p.team_id === m.team_a_id);
                                     const paymentB = payments.find(p => p.match_id === m.id && p.team_id === m.team_b_id);
                                     const totalPagado = (paymentA?.is_paid ? 35 : 0) + (paymentB?.is_paid ? 35 : 0);
+                                    
+                                    // Determinar estado de liquidación para el equipo
+                                    const getTeamColor = (payment: any) => {
+                                      if (m.status !== 'Liquidado') return 'text-slate-900';
+                                      return payment?.is_paid ? 'text-emerald-600' : 'text-red-500';
+                                    };
 
                                     return (
                                       <div key={m.id} className="flex justify-between items-center p-2.5 bg-slate-50/50 rounded-xl border border-slate-100 text-[11px] font-bold">
                                         <div className="text-slate-700 flex items-center gap-2">
                                           <span className="text-[10px] font-black">{m.match_time}</span>
-                                          <span className={paymentA?.is_paid ? 'text-slate-900' : 'text-red-500'}>{teamA}</span>
-                                          <span className="text-slate-300 font-black px-1">vs</span>
-                                          <span className={paymentB?.is_paid ? 'text-slate-900' : 'text-red-500'}>{teamB}</span>
+                                          <span className={getTeamColor(paymentA)}>{teamA}</span>
+                                          <span className="text-slate-300 font-black">VS</span>
+                                          <span className={getTeamColor(paymentB)}>{teamB}</span>
                                         </div>
                                         <span className="font-black text-slate-900">{totalPagado}€</span>
                                       </div>

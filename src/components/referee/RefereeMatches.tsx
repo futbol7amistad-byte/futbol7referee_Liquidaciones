@@ -204,14 +204,14 @@ function MatchCard({ match, getTeamName, getPaymentStatus, onSavePayment, onUpda
       team_id: match.team_a_id,
       amount: 35,
       is_paid: localPaymentA.isPaid,
-      reason: localPaymentA.isPaid ? 'Transferencia' : localPaymentA.reason
+      reason: localPaymentA.isPaid ? 'Metálico' : localPaymentA.reason
     });
     onSavePayment({
       match_id: match.id,
       team_id: match.team_b_id,
       amount: 35,
       is_paid: localPaymentB.isPaid,
-      reason: localPaymentB.isPaid ? 'Transferencia' : localPaymentB.reason
+      reason: localPaymentB.isPaid ? 'Metálico' : localPaymentB.reason
     });
     onUpdateStatus(match.id, 'Liquidado');
     setIsEditing(false);

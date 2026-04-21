@@ -14,7 +14,9 @@ export default function AdminTeams() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
 
-  const filteredTeams = teams.filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredTeams = teams
+    .filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const totalSanctionsAmount = sanctions.reduce((acc, s) => acc + s.amount, 0);
   const totalCollectedAmount = sanctions.filter(s => s.is_paid).reduce((acc, s) => acc + s.amount, 0);
   const sanctionedTeamsCount = teams.filter(t => t.pending_amount > 0).length;

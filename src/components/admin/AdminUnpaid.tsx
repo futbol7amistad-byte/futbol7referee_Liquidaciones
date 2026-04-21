@@ -6,7 +6,7 @@ import { formatDateDisplay } from '../../utils/formatters';
 export default function AdminUnpaid() {
   const { payments, teams, matches, referees } = useData();
 
-  const unpaidPayments = payments.filter(p => !p.is_paid);
+  const unpaidPayments = payments.filter(p => !p.is_paid && p.reason !== 'Metálico');
 
   return (
     <div className="space-y-6">

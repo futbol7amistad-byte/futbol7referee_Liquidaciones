@@ -49,6 +49,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [deliveries, setDeliveries] = useState<CashDelivery[]>([]);
   const [sanctions, setSanctions] = useState<Sanction[]>([]);
   const [settings, setSettings] = useState<AppSettings>({ logo_url: '', theme: 'light', season: '2025-2026' });
+
+  // Load settings once
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'app_settings'), (doc) => {
+      if (doc.exists()) {
+        setSettings(doc.data() as AppSettings);
+      }
+    });
+    return unsub;
+  }, []);
   const [hiddenPeriods, setHiddenPeriods] = useState<string[]>([]);
 
   useEffect(() => {
@@ -247,8 +257,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     hidePeriod(period);
   };
 
-  const updateSettings = (newSettings: Partial<AppSettings>) => {
-    setSettings(prev => ({ ...prev, ...newSettings }));
+  const updateSettings = async (newSettings: Partial<AppSettings>) => {
+    const settingsRef = doc(db, 'settings', 'app_settings');
+    await setDoc(settingsRef, { ...settings, ...newSettings }, { merge: true });
   };
 
   const updateMatchStatus = async (matchId: string, status: 'Programado' | 'Liquidado') => {

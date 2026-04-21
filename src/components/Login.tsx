@@ -185,10 +185,12 @@ export default function Login() {
                       className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-xl focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm bg-white shadow-inner transition-colors hover:bg-white appearance-none text-gray-900 font-bold"
                     >
                       <option value="">-- Selecciona tu nombre --</option>
-                      {Array.from(new Set(referees.map(r => r.name))).map(name => {
-                        const ref = referees.find(r => r.name === name);
-                        return <option key={ref?.id} value={ref?.username}>{name}</option>;
-                      })}
+                      {referees
+                        .slice()
+                        .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
+                        .map(ref => (
+                        <option key={ref.id} value={ref.username}>{ref.name.toUpperCase()}</option>
+                      ))}
                     </select>
                     <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                       <ChevronDown className="h-5 w-5 text-gray-400" />

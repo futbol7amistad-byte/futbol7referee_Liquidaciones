@@ -13,11 +13,15 @@ export default function AdminReferees() {
   const [showModal, setShowModal] = useState(false);
   const [editingReferee, setEditingReferee] = useState<Referee | null>(null);
 
-  const filteredReferees = referees.filter(r => 
-    (r.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    r.username.toLowerCase().includes(searchTerm.toLowerCase())) &&
-    (selectedRefereeId === '' || r.id === selectedRefereeId)
-  );
+  const filteredReferees = React.useMemo(() => {
+    return referees
+      .filter(r => 
+        (r.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        r.username.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        (selectedRefereeId === '' || r.id === selectedRefereeId)
+      )
+      .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+  }, [referees, searchTerm, selectedRefereeId]);
 
   const handleOpenModal = (referee: Referee | null = null) => {
     setEditingReferee(referee);
@@ -62,7 +66,7 @@ export default function AdminReferees() {
                 onChange={(e) => setSelectedRefereeId(e.target.value)}
               >
                 <option value="">TODOS LOS ÁRBITROS</option>
-                {referees.map(ref => (
+                {[...referees].sort((a,b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())).map(ref => (
                   <option key={ref.id} value={ref.id}>{ref.name.toUpperCase()}</option>
                 ))}
               </select>
