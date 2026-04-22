@@ -90,6 +90,19 @@ const RefereeDetailsModal = ({ isOpen, onClose, referee, matches, teams }: any) 
 
 export default function AdminPayments() {
   const { matches, referees, teams, payments, addPayment, deliveries, addDelivery } = useData();
+  
+  // Deduplicate payments to handle legacy duplicates in database
+  const uniquePayments = React.useMemo(() => {
+    const latestPayments: Record<string, any> = {};
+    payments.forEach(p => {
+      const key = `${p.match_id}_${p.team_id}`;
+      if (!latestPayments[key] || new Date(p.created_at) > new Date(latestPayments[key].created_at)) {
+        latestPayments[key] = p;
+      }
+    });
+    return Object.values(latestPayments);
+  }, [payments]);
+
   const [isRecaudacionOpen, setIsRecaudacionOpen] = useState(false);
   const [isResumenOpen, setIsResumenOpen] = useState(false);
   const [isImpagosOpen, setIsImpagosOpen] = useState(false);
@@ -117,7 +130,7 @@ export default function AdminPayments() {
         { teamId: m.team_b_id, id: `${m.id}-b`, equipo: teams.find(t => t.id === m.team_b_id)?.name || 'Desconocido', jornada: `J${m.match_round}`, fecha: m.match_date, campo: m.field, hora: m.match_time, arbitro: referees.find(r => r.id === m.referee_id)?.name || 'Sin Asignar', match_id: m.id, period: m.period }
       ])
       .map(item => {
-         const teamPayments = payments.filter(p => p.match_id === item.match_id && p.team_id === item.teamId);
+         const teamPayments = uniquePayments.filter(p => p.match_id === item.match_id && p.team_id === item.teamId);
          const paidPayment = teamPayments.find(p => p.is_paid);
          const unpaidPayment = teamPayments.find(p => !p.is_paid);
          
@@ -306,14 +319,14 @@ export default function AdminPayments() {
       if (match.team_b_id) count++;
       return acc + count;
     }, 0),
-    paid: payments.filter(p => p.is_paid && filteredMatches.some(m => m.id === p.match_id)).length,
-    unpaid: payments.filter(p => !p.is_paid && filteredMatches.some(m => m.id === p.match_id)).length
+    paid: uniquePayments.filter(p => p.is_paid && filteredMatches.some(m => m.id === p.match_id)).length,
+    unpaid: uniquePayments.filter(p => !p.is_paid && filteredMatches.some(m => m.id === p.match_id)).length
   };
 
   const kpiFinancial = {
     expected: filteredMatches.length * 70, // 35 per team
-    liquidated: payments.filter(p => p.is_paid && filteredMatches.some(m => m.id === p.match_id)).reduce((acc, p) => acc + p.amount, 0),
-    pending: payments.filter(p => !p.is_paid && filteredMatches.some(m => m.id === p.match_id)).reduce((acc, p) => acc + p.amount, 0)
+    liquidated: uniquePayments.filter(p => p.is_paid && filteredMatches.some(m => m.id === p.match_id)).reduce((acc, p) => acc + p.amount, 0),
+    pending: uniquePayments.filter(p => !p.is_paid && filteredMatches.some(m => m.id === p.match_id)).reduce((acc, p) => acc + p.amount, 0)
   };
 
   return (
@@ -413,7 +426,7 @@ export default function AdminPayments() {
             <div className="p-6 pt-0 border-t border-slate-50 space-y-4">
               {sortedDates.map(date => {
                 const dayMatches = matchesByDate[date].filter(m => m.status === 'Liquidado');
-                const totalAmount = payments
+                const totalAmount = uniquePayments
                   .filter(p => dayMatches.some(m => m.id === p.match_id) && p.is_paid)
                   .reduce((sum, p) => sum + p.amount, 0);
                 const isExpanded = expandedDate === date;
@@ -449,8 +462,8 @@ export default function AdminPayments() {
                               {refMatches.map(m => {
                                 const teamA = teams.find((t: any) => t.id === m.team_a_id)?.name || 'Desconocido';
                                 const teamB = teams.find((t: any) => t.id === m.team_b_id)?.name || 'Desconocido';
-                                const paymentA = payments.find(p => p.match_id === m.id && p.team_id === m.team_a_id);
-                                const paymentB = payments.find(p => p.match_id === m.id && p.team_id === m.team_b_id);
+                                const paymentA = uniquePayments.find(p => p.match_id === m.id && p.team_id === m.team_a_id);
+                                const paymentB = uniquePayments.find(p => p.match_id === m.id && p.team_id === m.team_b_id);
                                 const totalPagado = (paymentA?.is_paid ? 35 : 0) + (paymentB?.is_paid ? 35 : 0);
 
                                 // Determinar estado de liquidación para el equipo
@@ -506,7 +519,7 @@ export default function AdminPayments() {
               {[...referees].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())).map(ref => {
                 const refMatches = filteredMatches.filter(m => m.referee_id === ref.id);
                 const liquidatedMatches = refMatches.filter(m => m.status === 'Liquidado');
-                const totalAmount = payments
+                const totalAmount = uniquePayments
                   .filter(p => liquidatedMatches.some(m => m.id === p.match_id) && p.is_paid)
                   .reduce((sum, p) => sum + p.amount, 0);
                 const isExpanded = expandedRefereeId === ref.id;
@@ -577,8 +590,8 @@ export default function AdminPayments() {
                                   {dateMatches.map(m => {
                                     const teamA = teams.find((t: any) => t.id === m.team_a_id)?.name || 'Desconocido';
                                     const teamB = teams.find((t: any) => t.id === m.team_b_id)?.name || 'Desconocido';
-                                    const paymentA = payments.find(p => p.match_id === m.id && p.team_id === m.team_a_id);
-                                    const paymentB = payments.find(p => p.match_id === m.id && p.team_id === m.team_b_id);
+                                    const paymentA = uniquePayments.find(p => p.match_id === m.id && p.team_id === m.team_a_id);
+                                    const paymentB = uniquePayments.find(p => p.match_id === m.id && p.team_id === m.team_b_id);
                                     const totalPagado = (paymentA?.is_paid ? 35 : 0) + (paymentB?.is_paid ? 35 : 0);
                                     
                                     // Determinar estado de liquidación para el equipo

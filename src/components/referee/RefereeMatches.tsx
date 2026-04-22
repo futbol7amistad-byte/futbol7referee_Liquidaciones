@@ -66,19 +66,32 @@ export default function RefereeMatches() {
   const sortedDates = Object.keys(groupedMatches).sort();
   const getTeamName = (id: string) => teams.find(t => t.id === id)?.name || 'Desconocido';
   
+  // Deduplicate payments to handle legacy duplicates in database
+  const uniquePayments = React.useMemo(() => {
+    const latestPayments: Record<string, any> = {};
+    payments.forEach(p => {
+      const key = `${p.match_id}_${p.team_id}`;
+      // Take the most recent payment if duplicates exist
+      if (!latestPayments[key] || new Date(p.created_at) > new Date(latestPayments[key].created_at)) {
+        latestPayments[key] = p;
+      }
+    });
+    return Object.values(latestPayments);
+  }, [payments]);
+
   const getPaymentStatus = (matchId: string, teamId: string) => {
-    return payments.find(p => p.match_id === matchId && p.team_id === teamId);
+    return uniquePayments.find(p => p.match_id === matchId && p.team_id === teamId);
   };
 
   // KPIs
   const today = new Date().toISOString().split('T')[0];
   const todayMatches = myMatches.filter(m => m.match_date === today);
-  const collectedToday = payments
+  const collectedToday = uniquePayments
     .filter(p => todayMatches.some(m => m.id === p.match_id) && p.is_paid)
     .reduce((sum, p) => sum + p.amount, 0);
 
   const weekMatches = myMatches; // In this context, "week" is all assigned for now
-  const collectedWeek = payments
+  const collectedWeek = uniquePayments
     .filter(p => weekMatches.some(m => m.id === p.match_id) && p.is_paid)
     .reduce((sum, p) => sum + p.amount, 0);
 

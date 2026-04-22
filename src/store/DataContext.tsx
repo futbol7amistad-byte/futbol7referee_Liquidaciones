@@ -92,7 +92,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addPayment = async (payment: Omit<MatchPayment, 'id' | 'created_at'>) => {
-    await addDoc(collection(db, 'payments'), {
+    const paymentId = `${payment.match_id}_${payment.team_id}`;
+    await setDoc(doc(db, 'payments', paymentId), {
       ...payment,
       created_at: new Date().toISOString(),
     });
