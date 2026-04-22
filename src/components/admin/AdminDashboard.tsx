@@ -8,6 +8,19 @@ export default function AdminDashboard() {
   const today = new Date().toISOString().split('T')[0];
   const now = new Date();
 
+  // Deduplicate payments to handle legacy duplicates in database
+  const uniquePayments = React.useMemo(() => {
+    const latestPayments: Record<string, any> = {};
+    payments.forEach(p => {
+      const key = `${p.match_id}_${p.team_id}`;
+      // Take the most recent payment if duplicates exist
+      if (!latestPayments[key] || new Date(p.created_at) > new Date(latestPayments[key].created_at)) {
+        latestPayments[key] = p;
+      }
+    });
+    return Object.values(latestPayments);
+  }, [payments]);
+
   // Active period should be determined. Assuming current system date is within a period, 
   // or we need to infer it. For simplicity, assume matches cover needed periods.
   // We'll find active period based on today.
@@ -20,11 +33,11 @@ export default function AdminDashboard() {
   const liquidatedMatches = matches.filter(m => m.status === 'Liquidado');
   const activeLiquidatedMatches = liquidatedMatches.filter(m => m.period === activePeriod);
   
-  const activePayments = payments.filter(p => activeLiquidatedMatches.some(m => m.id === p.match_id));
+  const activePayments = uniquePayments.filter(p => activeLiquidatedMatches.some(m => m.id === p.match_id));
 
   // KPIs
-  const totalCollectedActive = activePayments.filter(p => p.is_paid).reduce((acc, p) => acc + p.amount, 0);
-  const totalCollectedToday = payments.filter(p => p.is_paid && p.created_at.startsWith(today)).reduce((acc, p) => acc + p.amount, 0);
+  const totalCollectedActive = activePayments.filter(p => p.is_paid).reduce((acc, p) => acc + (p.amount as number), 0);
+  const totalCollectedToday = uniquePayments.filter((p: any) => p.is_paid && p.created_at.startsWith(today)).reduce((acc, p) => acc + (p.amount as number), 0);
   
   const activeReferees = [...new Set(activeMatches.map(m => m.referee_id))].filter(Boolean);
   
@@ -39,7 +52,7 @@ export default function AdminDashboard() {
   const teamsWithPaymentsActive = teamsInActiveLiquidated.filter(tId => {
     const teamMatches = activeLiquidatedMatches.filter(m => m.team_a_id === tId || m.team_b_id === tId);
     return teamMatches.some(m => {
-        const payment = payments.find(p => p.match_id === m.id && p.team_id === tId);
+        const payment = uniquePayments.find(p => p.match_id === m.id && p.team_id === tId);
         return payment && payment.is_paid;
     });
   });
@@ -47,7 +60,7 @@ export default function AdminDashboard() {
   const unpaidActive = teamsInActiveLiquidated.filter(tId => {
     const teamMatches = activeLiquidatedMatches.filter(m => m.team_a_id === tId || m.team_b_id === tId);
     return teamMatches.some(m => {
-        const payment = payments.find(p => p.match_id === m.id && p.team_id === tId);
+        const payment = uniquePayments.find(p => p.match_id === m.id && p.team_id === tId);
         return payment && !payment.is_paid;
     });
   });
@@ -56,7 +69,7 @@ export default function AdminDashboard() {
   const totalUnpaid = teamsInAllLiquidated.filter(tId => {
     const teamMatches = liquidatedMatches.filter(m => m.team_a_id === tId || m.team_b_id === tId);
     return teamMatches.some(m => {
-        const payment = payments.find(p => p.match_id === m.id && p.team_id === tId);
+        const payment = uniquePayments.find(p => p.match_id === m.id && p.team_id === tId);
         return payment && !payment.is_paid;
     });
   });

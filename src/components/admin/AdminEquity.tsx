@@ -118,14 +118,22 @@ export default function AdminEquity() {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-200">
               {sortedReferees.map((r, index) => (
-                <tr key={r.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} hover:bg-indigo-50/30 transition-colors`}>
-                  <td className="px-6 py-4 font-black uppercase tracking-tight text-slate-900 border-b border-slate-50 sticky left-0 bg-inherit z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">{r.name}</td>
+                <tr 
+                  key={r.id} 
+                  className={`${index % 2 !== 0 ? 'bg-slate-100/50' : 'bg-white'} hover:bg-indigo-100/50 transition-colors group`}
+                >
+                  <td className="px-6 py-4 font-black uppercase tracking-tight text-slate-900 border-b border-slate-200 sticky left-0 bg-inherit z-10 shadow-[4px_0_10px_rgba(0,0,0,0.05)]">
+                    {r.name}
+                  </td>
                   {sortedTeams.map(t => {
                     const count = counts[r.id]?.[t.id] || 0;
                     return (
-                      <td key={t.id} className={`px-4 py-4 text-center font-bold border-b border-slate-50 ${count > 0 ? 'text-indigo-600 bg-indigo-500/5' : 'text-slate-300'}`}>
+                      <td 
+                        key={t.id} 
+                        className={`px-4 py-4 text-center font-bold border-b border-slate-200 ${count > 0 ? 'text-indigo-600' : 'text-slate-300'}`}
+                      >
                         {count || '-'}
                       </td>
                     );

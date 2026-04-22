@@ -306,9 +306,11 @@ export default function AdminPayments() {
   };
 
   // Calculate KPIs
+  const liquidatedMatches = filteredMatches.filter(m => m.status === 'Liquidado');
+
   const kpiMatches = {
     total: filteredMatches.length,
-    liquidated: filteredMatches.filter(m => m.status === 'Liquidado').length,
+    liquidated: liquidatedMatches.length,
     pending: filteredMatches.filter(m => m.status !== 'Liquidado').length
   };
 
@@ -319,14 +321,14 @@ export default function AdminPayments() {
       if (match.team_b_id) count++;
       return acc + count;
     }, 0),
-    paid: uniquePayments.filter(p => p.is_paid && filteredMatches.some(m => m.id === p.match_id)).length,
-    unpaid: uniquePayments.filter(p => !p.is_paid && filteredMatches.some(m => m.id === p.match_id)).length
+    paid: uniquePayments.filter(p => p.is_paid && liquidatedMatches.some(m => m.id === p.match_id)).length,
+    unpaid: uniquePayments.filter(p => !p.is_paid && liquidatedMatches.some(m => m.id === p.match_id)).length
   };
 
   const kpiFinancial = {
     expected: filteredMatches.length * 70, // 35 per team
-    liquidated: uniquePayments.filter(p => p.is_paid && filteredMatches.some(m => m.id === p.match_id)).reduce((acc, p) => acc + p.amount, 0),
-    pending: uniquePayments.filter(p => !p.is_paid && filteredMatches.some(m => m.id === p.match_id)).reduce((acc, p) => acc + p.amount, 0)
+    liquidated: uniquePayments.filter(p => p.is_paid && liquidatedMatches.some(m => m.id === p.match_id)).reduce((acc, p) => acc + p.amount, 0),
+    pending: uniquePayments.filter(p => !p.is_paid && liquidatedMatches.some(m => m.id === p.match_id)).reduce((acc, p) => acc + p.amount, 0)
   };
 
   return (

@@ -11,7 +11,7 @@ export default function RefereeMatches() {
   
   // Define periods first
   const periods = Array.from(new Set(matches.map(m => m.period || 'Sin periodo')))
-    .sort((a,b) => b.localeCompare(a))
+    .sort((a: any, b: any) => b.localeCompare(a))
     .map(period => {
       if (period === 'Sin periodo') {
          return { id: period, label: 'Sin periodo' };
@@ -85,12 +85,12 @@ export default function RefereeMatches() {
 
   // KPIs
   const today = new Date().toISOString().split('T')[0];
-  const todayMatches = myMatches.filter(m => m.match_date === today);
+  const todayMatches = myMatches.filter(m => m.match_date === today && m.status === 'Liquidado');
   const collectedToday = uniquePayments
     .filter(p => todayMatches.some(m => m.id === p.match_id) && p.is_paid)
     .reduce((sum, p) => sum + p.amount, 0);
 
-  const weekMatches = myMatches; // In this context, "week" is all assigned for now
+  const weekMatches = myMatches.filter(m => m.status === 'Liquidado'); 
   const collectedWeek = uniquePayments
     .filter(p => weekMatches.some(m => m.id === p.match_id) && p.is_paid)
     .reduce((sum, p) => sum + p.amount, 0);
