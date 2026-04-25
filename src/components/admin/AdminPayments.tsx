@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Banknote, Shield, Calendar, AlertCircle, Eye, Euro, Clock, MapPin, CheckCircle2, Download } from 'lucide-react';
+import { ChevronDown, ChevronUp, Banknote, Shield, Calendar, AlertCircle, Eye, Euro, Clock, MapPin, CheckCircle2, Download, MessageCircle, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useData } from '../../store/DataContext';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { exportToCSV } from '../../utils/exportUtils';
 import { toast } from 'sonner';
+import { getWhatsAppLink } from '../../utils/whatsapp';
 
 // Modal component for confirmation
 const ConfirmationModal = ({ isOpen, onClose, onConfirm, refereeName, amount, period, title }: any) => {
@@ -89,7 +90,7 @@ const RefereeDetailsModal = ({ isOpen, onClose, referee, matches, teams }: any) 
 };
 
 export default function AdminPayments() {
-  const { matches, referees, teams, payments, addPayment, deliveries, addDelivery } = useData();
+  const { matches, referees, teams, payments, addPayment, deliveries, addDelivery, settings } = useData();
   
   // Deduplicate payments to handle legacy duplicates in database
   const uniquePayments = React.useMemo(() => {
@@ -108,6 +109,7 @@ export default function AdminPayments() {
   const [isImpagosOpen, setIsImpagosOpen] = useState(false);
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [expandedRefereeId, setExpandedRefereeId] = useState<string | null>(null);
+  const [expandedImpagoId, setExpandedImpagoId] = useState<string | null>(null);
   const regions = Array.from(new Set(matches.map(m => m.period || 'Sin Periodo'))).sort().reverse();
   const periods = React.useMemo(() => Array.from(new Set(matches.map(m => m.period || 'Sin Periodo'))).sort().reverse(), [matches]);
   const [selectedPeriod, setSelectedPeriod] = useState<string>('');
@@ -202,62 +204,157 @@ export default function AdminPayments() {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {sortedData.map((i, index) => (
-                <tr key={i.id} className="hover:bg-slate-50/50 transition-all group animate-in fade-in slide-in-from-left-2 duration-300" style={{ animationDelay: `${index * 30}ms` }}>
-                  <td className="px-6 py-4 border-b border-slate-50">
-                    <div className="flex items-center gap-3">
-                      <span className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">{(index + 1).toString().padStart(2, '0')}</span>
-                      <span className="font-black text-slate-900 uppercase tracking-tight truncate max-w-[150px]">{i.equipo}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 font-bold text-slate-500 border-b border-slate-50 uppercase tracking-tighter">{i.jornada}</td>
-                  <td className="px-6 py-4 font-bold text-slate-500 border-b border-slate-50 whitespace-nowrap">{format(new Date(i.fecha), 'dd/MM/yyyy')}</td>
-                  <td className="px-6 py-4 font-bold text-indigo-600 border-b border-slate-50 uppercase tracking-tighter">{i.campo}</td>
-                  <td className="px-6 py-4 border-b border-slate-50 text-center">
-                    <div className="flex justify-center items-center gap-2">
-                      <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{i.motivo}</span>
-                      {i.motivo && (i.motivo === 'Olvido' || i.motivo === 'Otros') && (
-                        <div className="group relative">
-                          <AlertCircle className="w-3.5 h-3.5 text-amber-500 cursor-help animate-pulse" />
-                          <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-32 bg-slate-900 text-white text-[10px] py-2 px-3 rounded-xl shadow-xl text-center z-30 font-black tracking-tight uppercase border border-white/10 backdrop-blur-md">
-                            Seguimiento especial
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  {type !== 'actual' && (
+                <React.Fragment key={i.id}>
+                  <tr 
+                    onClick={() => setExpandedImpagoId(expandedImpagoId === i.id ? null : i.id)}
+                    className="hover:bg-slate-50/50 transition-all group animate-in fade-in slide-in-from-left-2 duration-300 cursor-pointer" 
+                    style={{ animationDelay: `${index * 30}ms` }}
+                  >
+                    <td className="px-6 py-4 border-b border-slate-50">
+                      <div className="flex items-center gap-3">
+                        <span className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">{(index + 1).toString().padStart(2, '0')}</span>
+                        <span className="font-black text-slate-900 uppercase tracking-tight truncate max-w-[150px]">{i.equipo}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 font-bold text-slate-500 border-b border-slate-50 uppercase tracking-tighter">{i.jornada}</td>
+                    <td className="px-6 py-4 font-bold text-slate-500 border-b border-slate-50 whitespace-nowrap">{format(new Date(i.fecha), 'dd/MM/yyyy')}</td>
+                    <td className="px-6 py-4 font-bold text-indigo-600 border-b border-slate-50 uppercase tracking-tighter">{i.campo}</td>
                     <td className="px-6 py-4 border-b border-slate-50 text-center">
-                      <div className="flex justify-center h-10 items-center">
-                        {type === 'seguimiento' && (
-                          !i.pagado ? (
-                            <button 
-                              onClick={() => { handleLiquidate(i); setModalData(null); }} 
-                              className="w-10 h-10 flex items-center justify-center text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95 border border-transparent hover:border-red-100 shadow-sm hover:shadow-md group/btn" 
-                              title="Marcar como Liquidado"
-                            >
-                              <Euro className="w-5 h-5 group-hover/btn:scale-110 transition-transform" />
-                            </button>
-                          ) : (
-                            <motion.div 
-                              initial={{ scale: 0.8, opacity: 0 }}
-                              animate={{ scale: 1, opacity: 1 }}
-                              className="flex items-center text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 shadow-app-inner ring-4 ring-emerald-50/10"
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5 mr-2 text-emerald-500" />
-                              <span className="text-[10px] font-black uppercase tracking-tighter">Liquidado</span>
-                            </motion.div>
-                          )
-                        )}
-                        {type === 'historico' && (
-                          <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border shadow-sm ${i.pagado ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-red-700 bg-red-50 border-red-100'}`}>
-                            {i.pagado ? `Pagado: ${i.fechaPago}` : 'Pendiente'}
-                          </span>
+                      <div className="flex justify-center items-center gap-2">
+                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">{i.motivo}</span>
+                        {(i.motivo === 'Olvido' || i.motivo === 'Otros') && (
+                          <div className="group relative">
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-500 cursor-help animate-pulse" />
+                            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-32 bg-slate-900 text-white text-[10px] py-2 px-3 rounded-xl shadow-xl text-center z-30 font-black tracking-tight uppercase border border-white/10 backdrop-blur-md">
+                              Seguimiento especial
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
+                            </div>
+                          </div>
                         )}
                       </div>
                     </td>
-                  )}
-                </tr>
+                    {type !== 'actual' && (
+                      <td className="px-6 py-4 border-b border-slate-50 text-center">
+                        <div className="flex justify-center h-10 items-center">
+                          {type === 'seguimiento' && (
+                            !i.pagado ? (
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleLiquidate(i); setModalData(null); }} 
+                                className="w-10 h-10 flex items-center justify-center text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95 border border-transparent hover:border-red-100 shadow-sm hover:shadow-md group/btn" 
+                                title="Marcar como Liquidado"
+                              >
+                                <Euro className="w-5 h-5 group-hover/btn:scale-110 transition-transform" />
+                              </button>
+                            ) : (
+                              <motion.div 
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                className="flex items-center text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 shadow-app-inner ring-4 ring-emerald-50/10"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5 mr-2 text-emerald-500" />
+                                <span className="text-[10px] font-black uppercase tracking-tighter">Liquidado</span>
+                              </motion.div>
+                            )
+                          )}
+                          {type === 'historico' && (
+                            <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border shadow-sm ${i.pagado ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-red-700 bg-red-50 border-red-100'}`}>
+                              {i.pagado ? `Pagado: ${i.fechaPago}` : 'Pendiente'}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                  <AnimatePresence>
+                    {expandedImpagoId === i.id && (
+                      <tr className="bg-slate-50 border-b border-slate-100">
+                        <td colSpan={type === 'actual' ? 5 : 6} className="p-0">
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden px-6 py-4"
+                          >
+                            <div className="bg-white rounded-[2rem] p-6 border border-slate-200 shadow-sm flex flex-col gap-6 relative">
+                              <button 
+                                onClick={() => setExpandedImpagoId(null)}
+                                className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600 transition-colors"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                              
+                              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                <div>
+                                  <h4 className="font-black text-slate-900 text-xl tracking-tight uppercase flex items-center gap-3">
+                                    <Shield className="w-6 h-6 text-indigo-500" />
+                                    {i.equipo}
+                                  </h4>
+                                  <p className="text-xs font-bold text-slate-500 mt-1">Tel: {teams.find(t => t.id === i.teamId)?.contact_phone || 'Sin registrar'}</p>
+                                </div>
+                                <div className="flex gap-3">
+                                  {teams.find(t => t.id === i.teamId)?.contact_phone && (
+                                    <a 
+                                      href={getWhatsAppLink(teams.find(t => t.id === i.teamId)?.contact_phone || '', `Hola responsable del equipo ${i.equipo}. Tienes pagos de arbitrajes pendientes en las instalaciones. Por favor, revisa la situación lo antes posible.`)} 
+                                      target="whatsapp_admin" 
+                                      className="flex items-center gap-2 px-6 py-3 bg-[#25D366] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#1DA851] transition-all shadow-lg shadow-[#25D366]/20 active:scale-95"
+                                    >
+                                      <MessageCircle className="w-4 h-4" />
+                                      Enviar Recordatorio
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100">
+                                <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                  <Calendar className="w-3.5 h-3.5" />
+                                  Historial de Arbitrajes Pendientes
+                                </h5>
+                                <div className="space-y-3">
+                                  {impagos
+                                    .filter(imp => imp.teamId === i.teamId && !imp.pagado)
+                                    .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+                                    .map(pending => (
+                                      <div key={pending.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm gap-4 hover:border-indigo-200 hover:shadow-md transition-all">
+                                        <div className="flex items-center gap-4">
+                                          <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center text-xs font-black text-red-600 border border-red-100 shadow-inner">
+                                            {pending.jornada}
+                                          </div>
+                                          <div>
+                                            <div className="text-sm font-black text-slate-900 flex items-center gap-2 mb-1">
+                                              {format(new Date(pending.fecha), 'dd/MM/yyyy')} a las {pending.hora}
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-[9px] font-black uppercase tracking-widest">{pending.campo}</span>
+                                              <span className="px-2 py-1 bg-amber-50 text-amber-600 border border-amber-100 rounded-lg text-[9px] font-black uppercase tracking-widest">
+                                                Motivo: {pending.motivo}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <button 
+                                          onClick={(e) => { e.stopPropagation(); handleLiquidate(pending); setModalData(null); }}
+                                          className="w-full sm:w-auto px-6 py-3 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all active:scale-95 flex items-center justify-center gap-2"
+                                        >
+                                          <Euro className="w-4 h-4" /> Liquidar Ahora
+                                        </button>
+                                      </div>
+                                    ))}
+                                  {impagos.filter(imp => imp.teamId === i.teamId && !imp.pagado).length === 0 && (
+                                    <div className="text-center py-6">
+                                      <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+                                      <p className="text-xs font-black uppercase tracking-widest text-slate-400">Equipo al corriente de pago</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        </td>
+                      </tr>
+                    )}
+                  </AnimatePresence>
+                </React.Fragment>
               ))}
             </tbody>
           </table>

@@ -1,17 +1,34 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useData } from '../../store/DataContext';
-import { Settings, Sun, Moon, Upload, Trash2, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Settings, Sun, Moon, Upload, Trash2, CheckCircle2, RefreshCw, HardDriveDownload, CalendarClock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { fileToBase64 } from '../../utils/imageUtils';
 
 export default function AdminSettings() {
-  const { settings, updateSettings } = useData();
+  const data = useData();
+  const { settings, updateSettings } = data;
   const [season, setSeason] = useState(settings.season);
+  const [backupFreq, setBackupFreq] = useState(settings.backup_frequency || 'none');
   const [showSaved, setShowSaved] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    setSeason(settings.season);
+    setBackupFreq(settings.backup_frequency || 'none');
+  }, [settings]);
+
   const handleSaveSeason = () => {
     updateSettings({ season });
+    triggerSave();
+  };
+
+  const handleSaveBackupConfig = (freq: 'none'|'weekly'|'monthly') => {
+    setBackupFreq(freq);
+    updateSettings({ backup_frequency: freq });
+    triggerSave();
+  };
+
+  const triggerSave = () => {
     setShowSaved(true);
     setTimeout(() => setShowSaved(false), 2000);
   };
@@ -28,6 +45,40 @@ export default function AdminSettings() {
     updateSettings({ logo_url: '' });
   };
 
+  const handleDownloadBackup = () => {
+    const backupData = {
+      timestamp: new Date().toISOString(),
+      season: settings.season,
+      data: {
+        matches: data.matches,
+        payments: data.payments,
+        referees: data.referees,
+        teams: data.teams,
+        deliveries: data.deliveries,
+        sanctions: data.sanctions,
+        accounts: data.accounts,
+        transactions: data.transactions,
+        economicSettings: data.economicSettings,
+        teamEconomicStatus: data.teamEconomicStatus,
+        settings: data.settings
+      }
+    };
+    
+    // Create Blob
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `futbol7_backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    updateSettings({ last_backup_date: new Date().toISOString() });
+    triggerSave();
+  };
+
   return (
     <div className="space-y-8 pb-12">
       {/* Header */}
@@ -37,7 +88,7 @@ export default function AdminSettings() {
             <Settings className="w-6 h-6 mr-3 text-gray-600" />
             Configuración
           </h2>
-          <p className="text-gray-500 font-medium">Personaliza el logo y temporada del campeonato</p>
+          <p className="text-gray-500 font-medium">Opciones generales, diseño de sistema y respaldos</p>
         </div>
         <button 
           onClick={() => window.location.reload()}
@@ -46,6 +97,63 @@ export default function AdminSettings() {
           <RefreshCw className="w-3.5 h-3.5 mr-2" />
           Recargar
         </button>
+      </div>
+
+      {/* Backup and Data Security */}
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
+        <div className="flex items-center gap-3 mb-6">
+           <div className="p-3 bg-emerald-50 rounded-xl">
+             <HardDriveDownload className="w-5 h-5 text-emerald-600" />
+           </div>
+           <div>
+             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Copias de Seguridad (Backup)</h3>
+             <p className="text-xs text-gray-500 font-medium">Exporta todos los datos del sistema para archivarlos o prevenir pérdidas accidentales.</p>
+           </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600 bg-gray-50 p-4 rounded-xl border border-gray-100 italic">
+              Se exportarán todas las configuraciones, categorías, partidos, asignaciones, árbitros y datos económicos de la temporada actual.
+            </p>
+            <button
+              onClick={handleDownloadBackup}
+              className="w-full flex justify-center items-center px-6 py-4 bg-emerald-600 text-white rounded-xl font-bold shadow-md shadow-emerald-600/20 hover:bg-emerald-700 transition-all"
+            >
+              <HardDriveDownload className="w-5 h-5 mr-3" />
+              Descargar Copia de Seguridad Completa (.json)
+            </button>
+            {settings.last_backup_date && (
+               <p className="text-xs font-bold text-emerald-700 text-center">
+                 Última copia realizada: {new Date(settings.last_backup_date).toLocaleString()}
+               </p>
+            )}
+          </div>
+          
+          <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4">
+             <div className="flex items-center gap-2 mb-2">
+                <CalendarClock className="w-4 h-4 text-slate-500" />
+                <h4 className="text-sm font-black text-slate-800">Periodicidad de Aviso de Copia</h4>
+             </div>
+             <p className="text-xs text-slate-500 mb-4">
+               Habilita un recordatorio global en el panel superior para que no olvides realizar tu copia con cierta periodicidad.
+             </p>
+             <div className="space-y-2">
+               <label className="flex items-center gap-3 bg-white p-3 border border-slate-200 rounded-xl cursor-pointer hover:border-indigo-500 transition-colors">
+                  <input type="radio" name="b_freq" checked={backupFreq === 'none'} onChange={() => handleSaveBackupConfig('none')} className="w-4 h-4 text-indigo-600 focus:ring-indigo-500" />
+                  <span className="text-sm font-bold text-slate-700">Sin avisos (Manual)</span>
+               </label>
+               <label className="flex items-center gap-3 bg-white p-3 border border-slate-200 rounded-xl cursor-pointer hover:border-indigo-500 transition-colors">
+                  <input type="radio" name="b_freq" checked={backupFreq === 'weekly'} onChange={() => handleSaveBackupConfig('weekly')} className="w-4 h-4 text-indigo-600 focus:ring-indigo-500" />
+                  <span className="text-sm font-bold text-slate-700">Aviso Semanal</span>
+               </label>
+               <label className="flex items-center gap-3 bg-white p-3 border border-slate-200 rounded-xl cursor-pointer hover:border-indigo-500 transition-colors">
+                  <input type="radio" name="b_freq" checked={backupFreq === 'monthly'} onChange={() => handleSaveBackupConfig('monthly')} className="w-4 h-4 text-indigo-600 focus:ring-indigo-500" />
+                  <span className="text-sm font-bold text-slate-700">Aviso Mensual</span>
+               </label>
+             </div>
+          </div>
+        </div>
       </div>
 
       {/* Season Settings */}

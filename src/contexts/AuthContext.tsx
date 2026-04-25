@@ -3,7 +3,7 @@ import { User, Role } from '../types';
 
 interface AuthContextType {
   user: User | null;
-  login: (role: Role) => void;
+  login: (roleOrCredentials: Role | { username: string; password: string }, userData?: User) => boolean;
   logout: () => void;
 }
 
@@ -19,13 +19,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const login = (role: Role, userData?: User) => {
-    const newUser: User = role === 'admin' 
-      ? { id: 'admin1', email: 'admin@example.com', role: 'admin', name: 'Administrador' }
-      : userData || { id: '', email: '', role: 'referee', name: '' };
+  const login = (roleOrCredentials: Role | { username: string; password: string }, userData?: User) => {
+    // Case 1: Dynamic Referee login from Login.tsx
+    if (typeof roleOrCredentials === 'string' && roleOrCredentials === 'referee' && userData) {
+      setUser(userData);
+      localStorage.setItem('auth_user', JSON.stringify(userData));
+      return true;
+    }
+
+    // Case 2: Hardcoded login (Admin/Collab)
+    if (typeof roleOrCredentials === 'object' && 'username' in roleOrCredentials) {
+      const { username, password } = roleOrCredentials;
+      if (username === 'Administrador' && password === 'F7Amistad2026*') {
+          const adminUser: User = { id: 'admin1', email: 'admin@futbol7amistad.com', role: 'admin', name: 'Administrador' };
+          setUser(adminUser);
+          localStorage.setItem('auth_user', JSON.stringify(adminUser));
+          return true;
+      }
+      if (username === 'Colaborador' && password === 'Pedro2026*') {
+          const collabUser: User = { id: 'colab1', email: 'colab@futbol7amistad.com', role: 'collaborator', name: 'Colaborador' };
+          setUser(collabUser);
+          localStorage.setItem('auth_user', JSON.stringify(collabUser));
+          return true;
+      }
+    }
     
-    setUser(newUser);
-    localStorage.setItem('auth_user', JSON.stringify(newUser));
+    return false;
   };
 
   const logout = () => {

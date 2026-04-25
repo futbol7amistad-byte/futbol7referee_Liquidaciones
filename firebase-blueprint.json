@@ -1,0 +1,190 @@
+{
+  "entities": {
+    "Season": {
+      "title": "Season",
+      "description": "Football season definition.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "start_date": { "type": "string", "format": "date" },
+        "end_date": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["open", "active", "closed"] }
+      },
+      "required": ["id", "name", "status"]
+    },
+    "Referee": {
+      "title": "Referee",
+      "description": "Information about referees including availability and blocked teams.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "seasonId": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["referee"] },
+        "username": { "type": "string" },
+        "phone": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "photo_url": { "type": "string" },
+        "category": { "type": "string" },
+        "preferences": { "type": "object" },
+        "disponibilidad": { "type": "object" }
+      },
+      "required": ["id", "seasonId", "name", "role", "status"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "Details about competing teams.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "seasonId": { "type": "string" },
+        "name": { "type": "string" },
+        "contact_phone": { "type": "string" },
+        "total_sanctions": { "type": "number" },
+        "pending_amount": { "type": "number" }
+      },
+      "required": ["id", "seasonId", "name"]
+    },
+    "Sanction": {
+      "title": "Sanction",
+      "description": "Disciplinary fines for teams.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "seasonId": { "type": "string" },
+        "team_id": { "type": "string" },
+        "amount": { "type": "number" },
+        "round": { "type": "number" },
+        "date": { "type": "string", "format": "date" },
+        "is_paid": { "type": "boolean" },
+        "reason": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "seasonId", "team_id", "amount", "is_paid"]
+    },
+    "Match": {
+      "title": "Match",
+      "description": "Scheduled games between teams.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "seasonId": { "type": "string" },
+        "match_round": { "type": "number" },
+        "match_date": { "type": "string", "format": "date" },
+        "match_time": { "type": "string" },
+        "day_name": { "type": "string" },
+        "field": { "type": "string" },
+        "team_a_id": { "type": "string" },
+        "team_b_id": { "type": "string" },
+        "competition": { "type": "string" },
+        "referee_id": { "type": "string" },
+        "status": { "type": "string", "enum": ["Programado", "Liquidado"] },
+        "level": { "type": "number" }
+      },
+      "required": ["id", "seasonId", "match_date", "match_time", "team_a_id", "team_b_id"]
+    },
+    "AccountingAccount": {
+      "title": "Accounting Account",
+      "description": "Chart of accounts entry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "seasonId": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["Ingreso", "Gasto"] },
+        "category": { "type": "string", "enum": ["Fijo", "Variable"] }
+      },
+      "required": ["id", "seasonId", "code", "name", "type", "category"]
+    },
+    "AccountingTransaction": {
+      "title": "Accounting Transaction",
+      "description": "Daily journal entry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "seasonId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "amount": { "type": "number" },
+        "accountId": { "type": "string" },
+        "description": { "type": "string" },
+        "relatedMatchId": { "type": "string" },
+        "relatedTeamId": { "type": "string" },
+        "isAutomated": { "type": "boolean" },
+        "type": { "type": "string", "enum": ["Ingreso", "Gasto"] },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "seasonId", "date", "amount", "accountId", "type"]
+    }
+  },
+  "firestore": {
+    "/seasons/{seasonId}": {
+      "schema": "Season",
+      "description": "Collection of seasons."
+    },
+    "/seasons/{seasonId}/referees/{refereeId}": {
+      "schema": "Referee",
+      "description": "Collection of referees for a season."
+    },
+    "/seasons/{seasonId}/teams/{teamId}": {
+      "schema": "Team",
+      "description": "Collection of teams for a season."
+    },
+    "/seasons/{seasonId}/sanctions/{sanctionId}": {
+      "schema": "Sanction",
+      "description": "Collection of team sanctions for a season."
+    },
+    "/seasons/{seasonId}/matches/{matchId}": {
+      "schema": "Match",
+      "description": "Collection of matches for a season."
+    },
+    "/seasons/{seasonId}/accounting_accounts/{accountId}": {
+      "schema": "AccountingAccount",
+      "description": "Chart of accounts for a season."
+    },
+    "/seasons/{seasonId}/accounting_transactions/{transactionId}": {
+      "schema": "AccountingTransaction",
+      "description": "Daily accounting entries for a season."
+    },
+    "/seasons/{seasonId}/economic_settings/config": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "registration_fee": { "type": "number" },
+          "license_cost_type1": { "type": "number" },
+          "license_base_cost_type1": { "type": "number" },
+          "license_cost_type2": { "type": "number" },
+          "license_base_cost_type2": { "type": "number" },
+          "referee_payment_standard": { "type": "number" },
+          "referee_payment_special": { "type": "number" },
+          "venue_costs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "venue_name": { "type": "string" },
+                "hourly_rate": { "type": "number" }
+              }
+            }
+          },
+          "headquarters_rent": { "type": "number" },
+          "aemf_membership": { "type": "number" }
+        }
+      },
+      "description": "Global economic configuration parameters per season."
+    },
+    "/seasons/{seasonId}/team_economic_status/{teamId}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "registration_paid": { "type": "boolean" },
+          "licenses_count_type1": { "type": "number" },
+          "licenses_count_type2": { "type": "number" }
+        }
+      },
+      "description": "Economic status of a specific team per season."
+    }
+  }
+}

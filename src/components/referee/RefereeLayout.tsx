@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { LogOut, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
+import { LogOut, Calendar, CheckCircle, AlertCircle, Lightbulb } from 'lucide-react';
 import { useData } from '../../store/DataContext';
 import Footer from '../Footer';
 

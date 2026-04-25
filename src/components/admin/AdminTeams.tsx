@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import { useData } from '../../store/DataContext';
-import { Users, Shield, Banknote, Plus, Search, ChevronDown, ChevronUp, AlertTriangle, History, X, CheckCircle2, Trash2 } from 'lucide-react';
+import { Users, Shield, Banknote, Plus, Search, ChevronDown, ChevronUp, AlertTriangle, History, X, CheckCircle2, Trash2, Pencil } from 'lucide-react';
 import { Team, Sanction } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatDateDisplay } from '../../utils/formatters';
 
 export default function AdminTeams() {
-  const { teams, sanctions, addSanction, markSanctionAsPaid, clearSanctions } = useData();
+  const { teams, sanctions, addSanction, markSanctionAsPaid, clearSanctions, addTeam, updateTeam } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [isTeamsOpen, setIsTeamsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [showSanctionModal, setShowSanctionModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showTeamModal, setShowTeamModal] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+  const [selectedEditTeam, setSelectedEditTeam] = useState<Team | null>(null);
 
   const filteredTeams = teams
     .filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -60,6 +62,7 @@ export default function AdminTeams() {
             Limpiar Sanciones
           </button>
           <button
+            onClick={() => { setSelectedEditTeam(null); setShowTeamModal(true); }}
             className="flex items-center px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 group"
           >
             <Plus className="w-5 h-5 mr-3 group-hover:rotate-90 transition-transform" />
@@ -143,13 +146,22 @@ export default function AdminTeams() {
                               </div>
                             </td>
                             <td className="px-6 py-5 whitespace-nowrap text-right">
-                              <button
-                                onClick={() => handleOpenSanctionModal(team)}
-                                className="inline-flex items-center px-5 py-2.5 bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-red-100 hover:bg-red-700 transition-all active:scale-95"
-                              >
-                                <AlertTriangle className="w-3.5 h-3.5 mr-2" />
-                                Sancionar
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => { setSelectedEditTeam(team); setShowTeamModal(true); }}
+                                  className="inline-flex items-center px-4 py-2.5 bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-100 transition-all active:scale-95"
+                                >
+                                  <Pencil className="w-3.5 h-3.5 mr-2" />
+                                  Editar
+                                </button>
+                                <button
+                                  onClick={() => handleOpenSanctionModal(team)}
+                                  className="inline-flex items-center px-5 py-2.5 bg-red-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-red-100 hover:bg-red-700 transition-all active:scale-95"
+                                >
+                                  <AlertTriangle className="w-3.5 h-3.5 mr-2" />
+                                  Sancionar
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -236,6 +248,33 @@ export default function AdminTeams() {
           </div>
         )}
       </div>
+
+      {/* Team Modal */}
+      <AnimatePresence>
+        {showTeamModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100"
+            >
+              <TeamModalForm 
+                 team={selectedEditTeam} 
+                 onSave={async (data) => {
+                   if (selectedEditTeam) {
+                     await updateTeam(selectedEditTeam.id, data);
+                   } else {
+                     await addTeam(data);
+                   }
+                   setShowTeamModal(false);
+                 }}
+                 onCancel={() => setShowTeamModal(false)}
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Sanction Modal */}
       <AnimatePresence>
@@ -383,10 +422,90 @@ function SanctionForm({ onCancel, onSave }: { onCancel: () => void, onSave: (dat
         </button>
         <button
           type="button"
-          onClick={() => onSave({ amount: parseFloat(amount), round: parseInt(round), date })}
+          onClick={() => onSave({ amount: parseFloat(amount) || 0, round: parseInt(round) || 0, date })}
           className="flex-1 py-4 bg-red-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-red-100 hover:bg-red-700 transition-all active:scale-95"
         >
           Confirmar Sanción
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TeamModalForm({ team, onSave, onCancel }: { team: Team | null, onSave: (data: any) => void, onCancel: () => void }) {
+  const [name, setName] = useState(team?.name || '');
+  const [delegate, setDelegate] = useState(team?.delegate || '');
+  const [phone, setPhone] = useState(team?.contact_phone || '');
+  const [email, setEmail] = useState(team?.email || '');
+
+  return (
+    <div className="p-8 space-y-6">
+      <div className="text-center mb-8">
+        <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight mb-2">
+          {team ? 'Editar Equipo' : 'Nuevo Equipo'}
+        </h3>
+        <p className="text-sm font-bold text-slate-500 uppercase tracking-widest gap-2">
+          {team ? 'Actualiza los datos del equipo' : 'Introduce los datos del nuevo equipo'}
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Nombre del Equipo</label>
+          <input
+            type="text"
+            className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-300 shadow-app-inner"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ej. Real Madrid F7"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Delegado</label>
+          <input
+            type="text"
+            className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-300 shadow-app-inner"
+            value={delegate}
+            onChange={(e) => setDelegate(e.target.value)}
+            placeholder="Nombre del delegado"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Teléfono</label>
+          <input
+            type="text"
+            className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-300 shadow-app-inner"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Teléfono de contacto"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Correo Electrónico</label>
+          <input
+            type="email"
+            className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-300 shadow-app-inner"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Correo electrónico"
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-4 pt-4">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 py-4 bg-white border border-slate-200 rounded-2xl text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-900 hover:border-slate-300 transition-all active:scale-95"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={() => onSave({ name, delegate, contact_phone: phone, email })}
+          className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95"
+        >
+          Guardar Equipo
         </button>
       </div>
     </div>

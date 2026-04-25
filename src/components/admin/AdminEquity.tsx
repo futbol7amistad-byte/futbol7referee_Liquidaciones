@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useData } from '../../store/DataContext';
-import { Scale, Sparkles, BarChart2, X } from 'lucide-react';
+import { Scale, Zap, BarChart2, X } from 'lucide-react';
 
 export default function AdminEquity() {
   const { referees, teams, matches } = useData();
@@ -62,7 +62,7 @@ export default function AdminEquity() {
           onClick={runAnalysis}
           className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-indigo-200 hover:bg-indigo-700 active:scale-[0.98] transition-all"
         >
-          <Sparkles className="w-4 h-4" />
+          <Zap className="w-4 h-4" />
           Analizar Equidad
         </button>
       </div>

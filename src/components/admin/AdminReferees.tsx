@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { useData } from '../../store/DataContext';
-import { Plus, Search, Edit2, Trash2, User, Upload, Sparkles, X, ChevronDown, MessageCircle } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, User, Upload, X, ChevronDown, MessageCircle, Zap } from 'lucide-react';
 import { Referee } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { fileToBase64 } from '../../utils/imageUtils';
+import { getWhatsAppLink } from '../../utils/whatsapp';
 
 export default function AdminReferees() {
   const { referees, addReferee, updateReferee, deleteReferee } = useData();
@@ -15,12 +16,14 @@ export default function AdminReferees() {
 
   const filteredReferees = React.useMemo(() => {
     return referees
-      .filter(r => 
-        (r.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        r.username.toLowerCase().includes(searchTerm.toLowerCase())) &&
-        (selectedRefereeId === '' || r.id === selectedRefereeId)
-      )
-      .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+      .filter(r => {
+        const name = r.name || '';
+        const username = r.username || '';
+        return (name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+               username.toLowerCase().includes(searchTerm.toLowerCase())) &&
+               (selectedRefereeId === '' || r.id === selectedRefereeId);
+      })
+      .sort((a, b) => (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase()));
   }, [referees, searchTerm, selectedRefereeId]);
 
   const handleOpenModal = (referee: Referee | null = null) => {
@@ -82,6 +85,7 @@ export default function AdminReferees() {
                   <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Información</th>
                   <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Credenciales</th>
                   <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Estado</th>
+                  <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Horas</th>
                   <th className="px-6 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Acciones</th>
                 </tr>
               </thead>
@@ -106,47 +110,42 @@ export default function AdminReferees() {
                       </div>
                     </td>
                     <td className="px-6 py-5 whitespace-nowrap">
-                      <div className="text-sm font-black text-slate-900 uppercase tracking-tight">{referee.name}</div>
+                      <div className="text-sm font-black text-slate-900 uppercase tracking-tight">{referee.name || 'SIN NOMBRE'}</div>
                       <div className="text-[10px] font-bold text-slate-400 mt-0.5">{referee.phone || 'Sin teléfono'}</div>
                     </td>
                     <td className="px-6 py-5 whitespace-nowrap">
                       <div className="flex flex-col gap-1">
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">User: {referee.username.toLowerCase()}</div>
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">User: {(referee.username || 'n/a').toLowerCase()}</div>
                         <div className="text-[11px] font-black text-indigo-600 bg-indigo-50 border border-indigo-100/50 px-2.5 py-1 rounded-lg inline-flex items-center w-fit shadow-sm">
                           {referee.password || '••••••'}
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-5 whitespace-nowrap">
-                      <span className={`px-3 py-1.5 inline-flex text-[10px] font-black uppercase tracking-widest rounded-xl border shadow-sm ${
-                        referee.status === 'active' 
-                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100 shadow-emerald-50/50' 
-                          : 'bg-slate-100 text-slate-400 border-slate-200 shadow-slate-50'
-                      }`}>
+                      <button 
+                        onClick={() => updateReferee(referee.id, { status: referee.status === 'active' ? 'inactive' : 'active' })}
+                        className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-xl border shadow-sm transition-all ${
+                          referee.status === 'active' 
+                            ? 'bg-emerald-50 text-emerald-600 border-emerald-100 shadow-emerald-50/50' 
+                            : 'bg-slate-100 text-slate-400 border-slate-200 shadow-slate-50'
+                        }`}
+                      >
                         {referee.status === 'active' ? 'Activo' : 'Inactivo'}
-                      </span>
+                      </button>
+                    </td>
+                    <td className="px-6 py-5 whitespace-nowrap text-center">
+                        <div className="flex flex-col items-center">
+                            <span className="text-sm font-black text-slate-900">{Object.values(referee.disponibilidad || {}).reduce((acc: number, h: any[]) => acc + h.length, 0)} / 8</span>
+                            <span className="text-[10px] font-bold text-slate-400">L:{referee.disponibilidad?.Lunes?.length || 0} | M:{referee.disponibilidad?.Martes?.length || 0} | X:{referee.disponibilidad?.Miercoles?.length || 0} | J:{referee.disponibilidad?.Jueves?.length || 0}</span>
+                        </div>
                     </td>
                     <td className="px-6 py-5 whitespace-nowrap text-right">
                       <div className="flex justify-end gap-2">
                         <a
-                          href={`https://wa.me/${referee.phone?.replace(/\s+/g, '')}?text=${encodeURIComponent(`Hola ${referee.name}, aquí tienes tus credenciales para acceder a la app:
-
-*Usuario*: ${referee.username.toUpperCase()}
-*Contraseña*: ${referee.password || 'Sin contraseña'}
-
-*Guía de acceso y uso:*
-1. Accede aquí: https://futbol7referee-liquidaciones.vercel.app/
-2. Introduce tu *Usuario* y *Contraseña*.
-3. Una vez en el panel, comprueba o selecciona el *Periodo* correcto.
-4. Despliega el día de tus partidos y verifica que son los correctos.
-5. Selecciona "PAGADO" si abonan en campo, o indica el motivo del impago (Transferencia, Olvido, Otros) por cada equipo.
-6. Pulsa "Guardar y Finalizar". El partido pasará de estado "Pendiente" a "Liquidado".
-7. *¿Error?* Si te equivocas, pulsa el botón "Editar", corrige los datos y vuelve a "Guardar y Finalizar".
-
-*Tip*: Añade este enlace a la pantalla de inicio de tu móvil para acceder siempre directamente.`)}`}
-                          target="_blank"
+                          href={getWhatsAppLink(referee.phone || '', `Hola ${referee.name}, aquí tienes tus credenciales para acceder a la app:\n\n*Usuario*: ${referee.username.toUpperCase()}\n*Contraseña*: ${referee.password || 'Sin contraseña'}\n\n*Guía de acceso y uso:*\n1. Accede aquí: https://futbol7referee-liquidaciones.vercel.app/\n2. Introduce tu *Usuario* y *Contraseña*.\n3. Una vez en el panel, comprueba o selecciona el *Periodo* correcto.\n4. Despliega el día de tus partidos y verifica que son los correctos.\n5. Selecciona \"PAGADO\" si abonan en campo, o indica el motivo del impago (Transferencia, Olvido, Otros) por cada equipo.\n6. Pulsa \"Guardar y Finalizar\". El partido pasará de estado \"Pendiente\" a \"Liquidado\".\n7. *¿Error?* Si te equivocas, pulsa el botón \"Editar\", corrige los datos y vuelve a \"Guardar y Finalizar\".\n\n*Tip*: Añade este enlace a la pantalla de inicio de tu móvil para acceder siempre directamente.`)}
+                          target="whatsapp_admin"
                           rel="noopener noreferrer"
-                          className="w-10 h-10 flex items-center justify-center text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-all border border-emerald-200 shadow-sm hover:shadow-md"
+                          className={`w-10 h-10 items-center justify-center text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-all border border-emerald-200 shadow-sm hover:shadow-md ${referee.status === 'inactive' ? 'hidden' : 'flex'}`}
                           title="Enviar credenciales y tutorial detallado por WhatsApp"
                         >
                           <MessageCircle className="h-4 w-4" />
@@ -159,7 +158,7 @@ export default function AdminReferees() {
                         </button>
                         <button 
                           onClick={() => deleteReferee(referee.id)}
-                          className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100 shadow-sm hover:shadow-md"
+                          className={`w-10 h-10 items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100 shadow-sm hover:shadow-md ${referee.status === 'inactive' ? 'hidden' : 'flex'}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -208,9 +207,13 @@ function RefereeModal({ referee, onClose, onSave }: { referee: Referee | null, o
     phone: referee?.phone || '',
     status: referee?.status || 'active',
     photo_url: referee?.photo_url || '',
-    password: referee?.password || ''
+    password: referee?.password || '',
+    preferences: referee?.preferences || { nivel: 2, camposVetados: [], equiposVetados: [] },
+    disponibilidad: referee?.disponibilidad || { Lunes: [], Martes: [], Miercoles: [], Jueves: [] }
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { teams } = useData(); // Necesitamos los equipos para el select
+  const campos = ["Tablero 1", "Tablero 2", "Campo Ext 1", "Campo Ext 2"]; // Debemos buscar una forma dinámica de obtener esto si fuera necesario
 
   const generatePassword = () => {
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -242,132 +245,145 @@ function RefereeModal({ referee, onClose, onSave }: { referee: Referee | null, o
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden border border-white"
+        className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-4xl overflow-hidden border border-white"
       >
         <div className="p-8 border-b border-slate-50 flex justify-between items-center relative">
           <div className="absolute top-0 left-0 w-full h-1 bg-indigo-600"></div>
           <div>
             <h3 className="text-xl font-display font-black text-slate-900 uppercase tracking-tight">{referee ? 'Editar Árbitro' : 'Nuevo Árbitro'}</h3>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Configuración de perfil y acceso</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Perfil, restricciones y disponibilidad</p>
           </div>
           <button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-all">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-8 space-y-8 max-h-[70vh] overflow-y-auto scrollbar-hide">
-          {/* Photo Section */}
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative group">
-               {formData.photo_url ? (
-                  <img src={formData.photo_url} alt="Preview" className="w-28 h-28 rounded-[2.5rem] object-cover border-4 border-slate-50 shadow-app-lg ring-1 ring-slate-100" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="w-28 h-28 rounded-[2.5rem] bg-slate-50 flex items-center justify-center border-4 border-slate-50 shadow-app-inner ring-1 ring-slate-100">
-                    <User className="w-12 h-12 text-slate-200" />
+        <div className="p-8 max-h-[70vh] overflow-y-auto scrollbar-hide">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-6">
+            <div className="space-y-6">
+              {/* Foto */ }
+              <div className="flex flex-col items-center gap-4">
+                  <div className="relative group">
+                    {formData.photo_url ? (
+                        <img src={formData.photo_url} alt="Preview" className="w-28 h-28 rounded-[2.5rem] object-cover border-4 border-slate-50 shadow-app-lg ring-1 ring-slate-100" referrerPolicy="no-referrer" />
+                      ) : (
+                        <div className="w-28 h-28 rounded-[2.5rem] bg-slate-50 flex items-center justify-center border-4 border-slate-50 shadow-app-inner ring-1 ring-slate-100">
+                          <User className="w-12 h-12 text-slate-200" />
+                        </div>
+                      )}
+                      <button 
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="absolute -bottom-2 -right-2 w-10 h-10 bg-indigo-600 text-white rounded-xl shadow-lg flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
+                      >
+                        <Upload className="w-4 h-4" />
+                      </button>
+                      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handlePhotoUpload} />
                   </div>
-                )}
-                <button 
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute -bottom-2 -right-2 w-10 h-10 bg-indigo-600 text-white rounded-xl shadow-lg flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
-                >
-                  <Upload className="w-4 h-4" />
-                </button>
-                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handlePhotoUpload} />
-            </div>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Foto de perfil (JPG/PNG)</p>
-          </div>
+              </div>
 
-          <div className="space-y-6">
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Nombre Completo</label>
-              <input
-                type="text"
-                required
-                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-900 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-300"
-                value={formData.name}
-                onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="Ej. Roberto García"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+              {/* Nombre y Usuario */}
               <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Usuario de Acceso</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-black text-slate-900 uppercase tracking-tight focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
-                    value={formData.username}
-                    onChange={(e) => setFormData({ ...formData, username: e.target.value.toUpperCase() })}
-                  />
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Nombre Completo</label>
+                <input type="text" className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-900" value={formData.name} onChange={(e) => handleNameChange(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Usuario</label>
+                  <input type="text" className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold text-slate-900" value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value.toUpperCase() })} />
+                </div>
+                <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Teléfono</label>
+                    <input type="tel" className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-900" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
                 </div>
               </div>
-               <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Teléfono</label>
-                  <input
-                    type="tel"
-                    className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-900 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-300"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="123 456 789"
-                  />
-               </div>
-            </div>
 
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Contraseña de Seguridad</label>
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  className="flex-1 px-5 py-4 bg-slate-900 text-indigo-400 border border-slate-800 rounded-2xl text-sm font-mono font-black tracking-widest focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all shadow-app-inner"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder="M12345"
-                />
-                <button 
-                  type="button"
-                  onClick={generatePassword}
-                  className="w-14 h-14 flex items-center justify-center bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 group"
-                >
-                  <Sparkles className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-                </button>
+              {/* Contraseña */}
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Contraseña de Seguridad</label>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    className="flex-1 px-5 py-4 bg-slate-900 text-indigo-400 border border-slate-800 rounded-2xl text-sm font-mono font-black tracking-widest focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all shadow-app-inner"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder="M12345"
+                  />
+                  <button 
+                    type="button"
+                    onClick={generatePassword}
+                    className="w-14 h-14 flex items-center justify-center bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 group"
+                  >
+                    <Zap className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                  </button>
+                </div>
               </div>
             </div>
+            </div>
+            
+            <div className="space-y-6 bg-slate-50 p-6 rounded-2xl">
+              <h4 className="text-xs font-black text-indigo-900 uppercase">Restricciones y Disponibilidad</h4>
+              
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Nivel Técnico</label>
+                <select className="w-full p-3 rounded-xl bg-white border border-slate-200 text-xs" value={formData.preferences.nivel} onChange={(e) => setFormData({...formData, preferences: {...formData.preferences, nivel: Number(e.target.value) as 1|2|3}})}>
+                  <option value={1}>Nivel 1 (Alto)</option>
+                  <option value={2}>Nivel 2 (Medio)</option>
+                  <option value={3}>Nivel 3 (Bajo)</option>
+                </select>
+              </div>
 
-            <div className="pt-2">
-               <label className="flex items-center gap-3 cursor-pointer group">
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      className="peer sr-only"
-                      checked={formData.status === 'active'}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.checked ? 'active' : 'inactive' })}
-                    />
-                    <div className="w-11 h-6 bg-slate-200 rounded-full peer-checked:bg-emerald-500 transition-colors"></div>
-                    <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5 shadow-sm"></div>
-                  </div>
-                  <span className="text-xs font-black text-slate-500 uppercase tracking-widest group-hover:text-slate-900 transition-colors">Estado de la Cuenta: {formData.status === 'active' ? 'ACTIVA' : 'INACTIVA'}</span>
-               </label>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Equipos Vetados</label>
+                <div className="h-24 overflow-y-auto bg-white p-3 rounded-xl border border-slate-200 text-[10px]">
+                  {[...teams].sort((a,b) => a.name.localeCompare(b.name)).map(t => (
+                    <label key={t.id} className="flex items-center gap-2 mb-1">
+                      <input type="checkbox" checked={formData.preferences.equiposVetados.includes(t.id)} onChange={(e) => {
+                          const newer = e.target.checked ? [...formData.preferences.equiposVetados, t.id] : formData.preferences.equiposVetados.filter(id => id !== t.id);
+                          setFormData({...formData, preferences: {...formData.preferences, equiposVetados: newer}});
+                        }}
+                      />
+                      {t.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Disponibilidad */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase">Disponibilidad (Lunes-Jueves)</label>
+                    <button type="button" onClick={() => {
+                        const nuevaDisp = { Lunes: ['20:30', '21:30'], Martes: ['20:30', '21:30'], Miercoles: ['20:30', '21:30'], Jueves: ['20:30', '21:30'] };
+                        setFormData({...formData, disponibilidad: nuevaDisp});
+                    }} className="text-[10px] text-indigo-600 font-bold hover:underline">Marcar todos</button>
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-slate-200 text-[10px] space-y-2">
+                  {Object.keys(formData.disponibilidad).map(dia => (
+                    <div key={dia} className="flex gap-2 items-center">
+                      <span className="w-16 font-bold">{dia}</span>
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={formData.disponibilidad[dia].includes('20:30')} onChange={(e) => {
+                         const time = '20:30'; 
+                         const newer = e.target.checked ? [...formData.disponibilidad[dia], time] : formData.disponibilidad[dia].filter(t => t !== time);
+                         setFormData({...formData, disponibilidad: {...formData.disponibilidad, [dia]: newer}});
+                      }}/> 20:30 </label>
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={formData.disponibilidad[dia].includes('21:30')} onChange={(e) => {
+                         const time = '21:30'; 
+                         const newer = e.target.checked ? [...formData.disponibilidad[dia], time] : formData.disponibilidad[dia].filter(t => t !== time);
+                         setFormData({...formData, disponibilidad: {...formData.disponibilidad, [dia]: newer}});
+                      }}/> 21:30 </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <div className="p-8 bg-slate-50 flex gap-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 py-4 bg-white border border-slate-200 rounded-2xl text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-900 hover:border-slate-300 transition-all active:scale-95"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={() => onSave(formData)}
-            className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95"
-          >
-            Guardar Perfil
-          </button>
+          <button type="button" onClick={onClose} className="flex-1 py-4 bg-white border border-slate-200 rounded-2xl text-xs font-black text-slate-400 uppercase tracking-widest">Cancelar</button>
+          <button type="button" onClick={() => onSave(formData)} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg">Guardar Perfil</button>
         </div>
       </motion.div>
     </div>

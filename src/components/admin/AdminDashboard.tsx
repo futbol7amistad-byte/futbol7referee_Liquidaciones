@@ -77,7 +77,7 @@ export default function AdminDashboard() {
   const stats = [
     {
       title: 'Total Recaudado (Periodo)',
-      value: `${totalCollectedActive.toLocaleString('es-ES')} €`,
+      value: `${totalCollectedActive.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`,
       subtitle: 'En la jornada activa',
       icon: Banknote,
       iconColor: 'text-emerald-600',
@@ -85,7 +85,7 @@ export default function AdminDashboard() {
     },
     {
       title: 'Hoy',
-      value: `${totalCollectedToday.toLocaleString('es-ES')} €`,
+      value: `${totalCollectedToday.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`,
       subtitle: 'Recaudado hoy',
       icon: TrendingUp,
       iconColor: 'text-blue-600',

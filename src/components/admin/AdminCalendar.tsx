@@ -1,12 +1,16 @@
 import React, { useState, useRef } from 'react';
 import { useData } from '../../store/DataContext';
-import { Calendar, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, X, ChevronDown, User, ArrowRight, RefreshCw, Shield, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { jsPDF } from "jspdf";
+import autoTable from 'jspdf-autotable';
+import { Calendar, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, X, ChevronDown, User, ArrowRight, RefreshCw, Shield, Trash2, ChevronLeft, ChevronRight, MessageSquare, GripVertical, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
 import { Match, Referee } from '../../types';
 import { formatDateDisplay, formatTimeDisplay } from '../../utils/formatters';
+import { getWhatsAppLink } from '../../utils/whatsapp';
 import { startOfMonth, endOfMonth, eachDayOfInterval, startOfISOWeek, endOfISOWeek, isSameMonth, isSameDay, isWithinInterval, format, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
+import PublicCalendar from '../PublicCalendar';
 
 export default function AdminCalendar() {
   const { matches: matchesRaw, referees, teams, importMatches, reassignReferee, clearMatchesInRange, deleteMatch, clearAllMatches, clearMatchesByPeriod, hiddenPeriods } = useData();
@@ -18,6 +22,146 @@ export default function AdminCalendar() {
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  // Drag and Drop state
+  const [draggingRefereeId, setDraggingRefereeId] = useState<string | null>(null);
+  const [dragOverMatchId, setDragOverMatchId] = useState<string | null>(null);
+
+  const getRefereeColor = (id: string, index?: number) => {
+    const colors = [
+      { bg: 'bg-indigo-500', text: 'text-white', border: 'border-indigo-600', dot: 'bg-white' },
+      { bg: 'bg-emerald-500', text: 'text-white', border: 'border-emerald-600', dot: 'bg-white' },
+      { bg: 'bg-amber-500', text: 'text-white', border: 'border-amber-600', dot: 'bg-white' },
+      { bg: 'bg-rose-500', text: 'text-white', border: 'border-rose-600', dot: 'bg-white' },
+      { bg: 'bg-violet-500', text: 'text-white', border: 'border-violet-600', dot: 'bg-white' },
+      { bg: 'bg-orange-500', text: 'text-white', border: 'border-orange-600', dot: 'bg-white' },
+      { bg: 'bg-cyan-500', text: 'text-white', border: 'border-cyan-600', dot: 'bg-white' },
+      { bg: 'bg-fuchsia-500', text: 'text-white', border: 'border-fuchsia-600', dot: 'bg-white' },
+      { bg: 'bg-lime-500', text: 'text-white', border: 'border-lime-600', dot: 'bg-white' },
+      { bg: 'bg-sky-500', text: 'text-white', border: 'border-sky-600', dot: 'bg-white' },
+      { bg: 'bg-pink-500', text: 'text-white', border: 'border-pink-600', dot: 'bg-white' },
+      { bg: 'bg-yellow-500', text: 'text-white', border: 'border-yellow-600', dot: 'bg-white' },
+      { bg: 'bg-teal-500', text: 'text-white', border: 'border-teal-600', dot: 'bg-white' },
+      { bg: 'bg-slate-700', text: 'text-white', border: 'border-slate-800', dot: 'bg-white' },
+      { bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-700', dot: 'bg-white' },
+      { bg: 'bg-zinc-600', text: 'text-white', border: 'border-zinc-700', dot: 'bg-white' },
+    ];
+    
+    // Fallback: busca el índice por ID si no se proporciona
+    if (index === undefined) {
+      index = referees.findIndex(r => r.id === id);
+    }
+    
+    // Si no se encuentra (índice -1), usa el hash para un fallback determinista
+    if (index === undefined || index === -1) {
+        let hash = 0;
+        for (let i = 0; i < id.length; i++) {
+            hash = id.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        index = Math.abs(hash);
+    }
+    
+    return colors[index % colors.length];
+  };
+
+  const getDayColor = (day?: string) => {
+    const d = day?.toLowerCase() || '';
+    if (d.includes('lun')) return 'bg-sky-500 text-white';
+    if (d.includes('mar')) return 'bg-emerald-600 text-white';
+    if (d.includes('mie') || d.includes('mié')) return 'bg-amber-500 text-white';
+    if (d.includes('jue')) return 'bg-indigo-600 text-white';
+    if (d.includes('vie')) return 'bg-rose-600 text-white';
+    if (d.includes('sab') || d.includes('sáb')) return 'bg-slate-900 text-white';
+    if (d.includes('dom')) return 'bg-red-700 text-white';
+    return 'bg-gray-500 text-white';
+  };
+
+  const handleShareWhatsApp = () => {
+    // Ordenar por fecha -> campo -> hora
+    const sorted = [...matches].sort((a, b) => {
+      if (a.match_date !== b.match_date) return a.match_date.localeCompare(b.match_date);
+      if (a.field !== b.field) return a.field.localeCompare(b.field);
+      return a.match_time.localeCompare(b.match_time);
+    });
+
+    let message = "⚽ *DESIGNACIONES ARBITRALES*\n\n";
+    let lastDate = "";
+    
+    sorted.forEach(m => {
+      const dateStr = formatDateDisplay(m.match_date);
+      if (dateStr !== lastDate) {
+        message += `\n📅 *${dateStr} (${m.day_name || ''})*\n`;
+        lastDate = dateStr;
+      }
+      const referee = referees.find(r => r.id === m.referee_id)?.name || "❌ SIN ASIGNAR";
+      const teamA = teams.find(t => t.id === m.team_a_id)?.name || m.team_a_name;
+      const teamB = teams.find(t => t.id === m.team_b_id)?.name || m.team_b_name;
+      
+      message += `• ${formatTimeDisplay(m.match_time)} | ${m.field} | ${teamA} vs ${teamB} ➔ *${referee}*\n`;
+    });
+
+    // Public link for referees: Simple query param for maximum compatibility
+    const baseUrl = window.location.href.split('#')[0].split('?')[0];
+    const publicLink = baseUrl + '?public';
+    message += `\n\n🔗 *Consulta completa aquí:* ${publicLink}`;
+
+    window.open(getWhatsAppLink('', message), 'whatsapp_admin');
+  };
+
+  const [showPublicPreview, setShowPublicPreview] = useState(false);
+
+  const handleOpenPublicCalendar = () => {
+    setShowPublicPreview(true);
+  };
+
+  const [showWarningModal, setShowWarningModal] = useState(false);
+  const [warningMessage, setWarningMessage] = useState('');
+  const [pendingReassignData, setPendingReassignData] = useState<{matchId: string, refId: string, both: boolean} | null>(null);
+
+  const handleDragStart = (refId: string) => {
+    setDraggingRefereeId(refId);
+  };
+
+  const handleDropOnMatch = (matchId: string) => {
+    if (draggingRefereeId) {
+      const match = matches.find(m => m.id === matchId);
+      if (match) {
+        // Check if referee already has matches that day
+        const hasMatchThatDay = matches.some(m => m.match_date === match.match_date && m.referee_id === draggingRefereeId);
+        
+        if (hasMatchThatDay) {
+          const refName = referees.find(r => r.id === draggingRefereeId)?.name || 'Este árbitro';
+          setWarningMessage(`${refName} ya tiene partidos asignados el día ${formatDateDisplay(match.match_date)}. ¿Deseas asignarlo de todos modos?`);
+          setPendingReassignData({ matchId, refId: draggingRefereeId, both: false });
+          setShowWarningModal(true);
+          setDraggingRefereeId(null);
+          setDragOverMatchId(null);
+          return;
+        }
+
+        // Find if this match had an original referee who has a consecutive match
+        const consecutive = matches.find(m => 
+          m.id !== match.id &&
+          m.match_date === match.match_date &&
+          m.field === match.field &&
+          m.referee_id === match.referee_id &&
+          m.referee_id !== '' &&
+          m.referee_id !== 'r-unassigned'
+        );
+
+        if (consecutive) {
+          setReassignMatch(match);
+          setNewRefereeId(draggingRefereeId);
+          setConsecutiveMatch(consecutive);
+          setShowConsecutiveModal(true);
+        } else {
+          reassignReferee(matchId, draggingRefereeId);
+        }
+      }
+      setDraggingRefereeId(null);
+      setDragOverMatchId(null);
+    }
+  };
 
   // Helper to generate calendar days
   const getDaysInMonth = (date: Date) => {
@@ -43,11 +187,239 @@ export default function AdminCalendar() {
   const [newRefereeId, setNewRefereeId] = useState('');
 
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [showRefereeLoadModal, setShowRefereeLoadModal] = useState(false);
   const [showDeletePeriodModal, setShowDeletePeriodModal] = useState<string | null>(null);
   const [matchToDelete, setMatchToDelete] = useState<string | null>(null);
   const [showErrorModal, setShowErrorModal] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportToExcel = () => {
+    // Ordenar los partidos por Fecha + Campo + Hora
+    const sortedMatches = [...matches].sort((a, b) => {
+      // Comparar Fechas
+      if (a.match_date !== b.match_date) {
+        return a.match_date.localeCompare(b.match_date);
+      }
+      // Comparar Campos
+      if (a.field !== b.field) {
+        return a.field.localeCompare(b.field);
+      }
+      // Comparar Horas
+      return a.match_time.localeCompare(b.match_time);
+    });
+
+    const exportData = sortedMatches.map(m => {
+      const teamA = teams.find(t => t.id === m.team_a_id)?.name || m.team_a_name;
+      const teamB = teams.find(t => t.id === m.team_b_id)?.name || m.team_b_name;
+      const referee = referees.find(r => r.id === m.referee_id)?.name || 'SIN ASIGNAR';
+      
+      return {
+        'Jornada': m.match_round,
+        'Fecha': formatDateDisplay(m.match_date),
+        'Día': m.day_name,
+        'Hora': formatTimeDisplay(m.match_time),
+        'Campo': m.field,
+        'Competición': m.competition,
+        'Local': teamA,
+        'Visitante': teamB,
+        'Árbitro': referee
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Calendario");
+
+    // Generate buffer
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    
+    // Download file
+    const url = URL.createObjectURL(data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Calendario_Arbitros_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+    link.click();
+  };
+
+  const addPdfHeader = (doc: jsPDF, docMatches: Match[]) => {
+    doc.setFontSize(16);
+    doc.setTextColor(0, 0, 0);
+    doc.text("CAMPEONATO DE FUTBOL 7 LA AMISTAD | SANTA CRUZ DE TENERIFE", 105, 12, { align: 'center' });
+    doc.setFontSize(9);
+    doc.text(`Jornada correspondiente al periodo del ${formatDateDisplay(docMatches[0]?.match_date || '')} al ${formatDateDisplay(docMatches[docMatches.length-1]?.match_date || '')}`, 105, 18, { align: 'center' });
+  };
+
+  const handleGeneratePDFByField = () => {
+    const doc = new jsPDF();
+    const sortedMatches = [...matches].sort((a, b) => 
+        a.field.localeCompare(b.field) || a.match_date.localeCompare(b.match_date) || a.match_time.localeCompare(b.match_time)
+    );
+    
+    // Group by field
+    const groupedMatches: Record<string, Match[]> = {};
+    sortedMatches.forEach(m => {
+        if (!groupedMatches[m.field]) groupedMatches[m.field] = [];
+        groupedMatches[m.field].push(m);
+    });
+
+    let currentStartY = 22; // Initial position
+
+    Object.entries(groupedMatches).forEach(([field, fieldMatches], index) => {
+        if (index > 0) {
+            currentStartY += 10; // Add space between sections
+            if (currentStartY > 260) {
+                doc.addPage();
+                currentStartY = 22;
+            }
+        }
+
+        addPdfHeader(doc, matches);
+        
+        const tableData = fieldMatches.map(m => {
+             const teamA = teams.find(t => t.id === m.team_a_id)?.name || m.team_a_name;
+             const teamB = teams.find(t => t.id === m.team_b_id)?.name || m.team_b_name;
+             return [
+                 m.match_round,
+                 `${formatDateDisplay(m.match_date)} (${m.day_name || ''})`,
+                 formatTimeDisplay(m.match_time),
+                 m.field,
+                 `${teamA} vs ${teamB}`
+             ];
+        });
+
+        autoTable(doc, {
+            head: [['J', 'Fecha (Día)', 'Hora', 'Campo', 'Encuentro']],
+            body: tableData,
+            startY: currentStartY,
+            styles: { fontSize: 6, cellPadding: 0.8, overflow: 'linebreak' },
+            headStyles: { fontSize: 6, cellPadding: 0.8, fillColor: [41, 128, 185] },
+            margin: { top: 10, left: 5, right: 5 }
+        });
+        
+        currentStartY = (doc as any).lastAutoTable.finalY;
+    });
+
+    doc.save(`Calendario_Por_Campo_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+  };
+
+  const handleGeneratePDF = () => {
+    const doc = new jsPDF();
+    
+    // Header
+    addPdfHeader(doc, matches);
+
+    // Consistent sorting
+    const sortedMatches = [...matches].sort((a, b) => {
+        if (a.match_date !== b.match_date) return a.match_date.localeCompare(b.match_date);
+        if (a.field !== b.field) return a.field.localeCompare(b.field);
+        return a.match_time.localeCompare(b.match_time);
+    });
+
+    const weekdayColors: Record<string, [number, number, number]> = {
+        'Lunes': [200, 230, 255], 'Martes': [200, 255, 210],
+        'Miércoles': [255, 240, 200], 'Jueves': [230, 200, 255],
+        'Viernes': [255, 200, 200], 'Sábado': [220, 220, 220], 'Domingo': [255, 100, 100]
+    };
+    
+    // Create a unique, distinct, hardcoded color for each referee
+    const refColorMap: Record<string, [number, number, number]> = {};
+    const distinctColors: [number, number, number][] = [
+        [255, 0, 0],    // Rojo
+        [0, 128, 0],    // Verde oscuro
+        [0, 0, 255],    // Azul
+        [255, 165, 0],  // Naranja
+        [128, 0, 128],  // Púrpura
+        [255, 20, 147], // Rosa fuerte
+        [0, 255, 255],  // Cian
+        [139, 69, 19],  // Marrón
+        [255, 215, 0],  // Oro
+        [128, 128, 128],// Gris
+        [0, 100, 0],    // Verde muy oscuro
+        [165, 42, 42],  // Marrón rojizo
+        [75, 0, 130],   // Indigo
+        [255, 99, 71],  // Tomate
+        [32, 178, 170]  // Verde mar
+    ];
+    
+    // Sort referees alphabetically so color assignment is deterministic and permanent
+    const sortedRefs = [...referees].sort((a, b) => a.id.localeCompare(b.id));
+    
+    // Add more distinct colors to handle larger teams
+    const additionalColors: [number, number, number][] = [[0, 0, 0], [255, 192, 203], [0, 255, 127], [255, 69, 0], [47, 79, 79]];
+    const expandedColors: [number, number, number][] = [...distinctColors, ...additionalColors];
+    
+    sortedRefs.forEach((r, idx) => {
+        refColorMap[r.id] = expandedColors[idx % expandedColors.length];
+    });
+
+    const tableData: any[] = [];
+    let lastDate = "";
+
+    sortedMatches.forEach((m, index) => {
+        const teamA = teams.find(t => t.id === m.team_a_id)?.name || m.team_a_name;
+        const teamB = teams.find(t => t.id === m.team_b_id)?.name || m.team_b_name;
+        const referee = referees.find(r => r.id === m.referee_id);
+        
+        // Abbreviate Fields
+        const field = m.field.replace('Montaña Pacho', 'MP');
+
+        // Add thin separator line
+        if (lastDate && m.match_date !== lastDate) {
+            tableData.push([{content: '', colSpan: 6, styles: {fillColor: [200, 200, 200], minCellHeight: 0.2}}]);
+        }
+        
+        tableData.push([
+            m.match_round,
+            {content: `${formatDateDisplay(m.match_date)} (${m.day_name || ''})`, dayName: m.day_name},
+            formatTimeDisplay(m.match_time),
+            field,
+            `${teamA} vs ${teamB}`,
+            {content: referee?.name || 'SIN ASIGNAR', refereeId: m.referee_id}
+        ]);
+        lastDate = m.match_date;
+    });
+
+    autoTable(doc, {
+        head: [['J', 'Fecha (Día)', 'Hora', 'Campo', 'Encuentro', 'Árbitro']],
+        body: tableData,
+        startY: 22, // Moved higher as the header is now more compact
+        styles: { fontSize: 6, cellPadding: 0.8, overflow: 'linebreak' },
+        headStyles: { fontSize: 6, cellPadding: 0.8, fillColor: [41, 128, 185] },
+        margin: { top: 10, left: 5, right: 5 },
+        didParseCell: (data) => {
+            // Apply row shading based on weekday
+            const dayName = (data.cell.raw as any)?.dayName;
+            if (dayName) {
+                const lowerDay = dayName.toLowerCase();
+                if (lowerDay.includes('miércoles')) {
+                    data.cell.styles.fillColor = [255, 255, 200]; // Soft Yellow
+                } else if (weekdayColors && data.column.index === 1) {
+                    const color = Object.keys(weekdayColors).find(d => lowerDay.includes(d.toLowerCase().slice(0,3)));
+                    if (color) data.cell.styles.fillColor = weekdayColors[color];
+                }
+            }
+
+            // Apply referee colors
+            if (data.column.index === 5 && data.cell.section === 'body') {
+                const refereeId = (data.cell.raw as any).refereeId;
+                if (refereeId && refColorMap[refereeId]) {
+                    data.cell.styles.fillColor = refColorMap[refereeId];
+                    data.cell.styles.textColor = [255, 255, 255];
+                    data.cell.styles.halign = 'center';
+                }
+            }
+        }
+    });
+
+    // Add footer timestamp
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    doc.setFontSize(7);
+    doc.text(`Listado emitido el ${format(new Date(), 'dd/MM/yyyy')} a las ${format(new Date(), 'HH:mm')} horas.`, 105, 290, { align: 'center' });
+
+    doc.save(`Calendario_Arbitros_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+  };
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -104,7 +476,7 @@ export default function AdminCalendar() {
         const competition = getVal(['Categoría', 'Categoria', 'Division', 'Competicion']);
         const round = getVal(['Jornada', 'Semana', 'Round']);
         const time = getVal(['Hora', 'Horario']);
-        const dayName = getVal(['Dia de la Semana', 'Día de la Semana', 'Dia', 'Día']);
+        const dayNameRaw = getVal(['Dia de la Semana', 'Día de la Semana', 'Dia', 'Día']);
         const dateRaw = getVal(['Fecha', 'Date']);
 
         // Find team IDs by name (for preview)
@@ -122,6 +494,14 @@ export default function AdminCalendar() {
 
         // Normalize Time to HH:MM for internal storage
         const matchTime = formatTimeDisplay(time);
+        
+        // Determinar el nombre del día a partir de la fecha si no viene en el Excel
+        let dayName = dayNameRaw;
+        if (!dayName && matchDate) {
+            const dateObj = new Date(matchDate + 'T12:00:00'); // T12:00 para evitar problemas de zona horaria
+            const daysMap = ["Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sábado"];
+            dayName = daysMap[dateObj.getDay()];
+        }
 
         return {
           match_round: round,
@@ -163,10 +543,17 @@ export default function AdminCalendar() {
     }
   };
 
-  const confirmImport = () => {
+  const confirmImport = async () => {
     if (!startDate || !endDate) return;
     const startStr = format(startDate, 'yyyy-MM-dd');
     const endStr = format(endDate, 'yyyy-MM-dd');
+    
+    // Si estamos sustituyendo (hay conflictos), borrar antes
+    const conflicts = matches.filter(m => m.match_date >= startStr && m.match_date <= endStr);
+    if (conflicts.length > 0) {
+        await clearMatchesInRange(startStr, endStr);
+    }
+    
     importMatches(tempMatches, `${startStr}_to_${endStr}`, startStr, endStr);
     setShowConflictModal(false);
     setShowSuccessModal(true);
@@ -179,22 +566,42 @@ export default function AdminCalendar() {
   };
 
   const confirmReassignment = (reassignBoth: boolean = false) => {
-    console.log('confirmReassignment called');
-    console.log('reassignMatch:', reassignMatch);
-    console.log('newRefereeId:', newRefereeId);
     if (reassignMatch && newRefereeId) {
-      console.log('Reassigning match:', reassignMatch.id, 'to referee:', newRefereeId);
+      // Check for day collision warning before final assign
+      const hasMatchThatDay = matches.some(m => m.match_date === reassignMatch.match_date && m.referee_id === newRefereeId);
+      
+      if (hasMatchThatDay && !pendingReassignData) {
+        const refName = referees.find(r => r.id === newRefereeId)?.name || 'Este árbitro';
+        setWarningMessage(`${refName} ya tiene partidos asignados el día ${formatDateDisplay(reassignMatch.match_date)}. ¿Deseas asignarlo de todos modos?`);
+        setPendingReassignData({ matchId: reassignMatch.id, refId: newRefereeId, both: reassignBoth });
+        setShowWarningModal(true);
+        return;
+      }
+
       reassignReferee(reassignMatch.id, newRefereeId);
       if (reassignBoth && consecutiveMatch) {
-        console.log('Reassigning consecutive match:', consecutiveMatch.id, 'to referee:', newRefereeId);
         reassignReferee(consecutiveMatch.id, newRefereeId);
       }
       setReassignMatch(null);
       setConsecutiveMatch(null);
       setShowConsecutiveModal(false);
       setNewRefereeId('');
-    } else {
-      console.log('Missing reassignMatch or newRefereeId in confirmReassignment');
+      setPendingReassignData(null);
+    }
+  };
+
+  const handleConfirmWarning = () => {
+    if (pendingReassignData) {
+      reassignReferee(pendingReassignData.matchId, pendingReassignData.refId);
+      if (pendingReassignData.both && consecutiveMatch) {
+        reassignReferee(consecutiveMatch.id, pendingReassignData.refId);
+      }
+      setShowWarningModal(false);
+      setPendingReassignData(null);
+      setReassignMatch(null);
+      setConsecutiveMatch(null);
+      setShowConsecutiveModal(false);
+      setNewRefereeId('');
     }
   };
 
@@ -224,6 +631,24 @@ export default function AdminCalendar() {
       confirmReassignment(false);
     }
   };
+
+  const refereeLoadData = React.useMemo(() => referees.map(ref => {
+    const assignedMatches = matches.filter(m => m.referee_id === ref.id);
+    let totalSlots = 0;
+    if (ref.disponibilidad) {
+        Object.values(ref.disponibilidad).forEach((slots) => {
+          if (Array.isArray(slots)) {
+            totalSlots += slots.length;
+          }
+        });
+    }
+    return {
+      name: ref.name,
+      assignedCount: assignedMatches.length,
+      totalSlots,
+      remaining: Math.max(0, totalSlots - assignedMatches.length)
+    };
+  }).sort((a, b) => b.remaining - a.remaining), [referees, matches]);
 
   const selectedRefereeMatches = matches.filter(m => m.referee_id === selectedRefereeId);
 
@@ -456,18 +881,104 @@ export default function AdminCalendar() {
             <h3 className="text-lg font-bold text-gray-900">Partidos Cargados en el Sistema</h3>
             <p className="text-sm text-gray-500 font-medium">Total: {matches.length} partidos</p>
           </div>
-          <button
-            onClick={() => setShowDeleteAllModal(true)}
-            className="flex items-center px-4 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition-colors"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Borrar Todo
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleOpenPublicCalendar}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-md active:scale-95"
+              title="Ver cómo lo ven los árbitros"
+            >
+              <Calendar className="w-4 h-4 mr-2" />
+              Ver Calendario
+            </button>
+            <button
+              onClick={handleExportToExcel}
+              className="flex items-center px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors"
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              Exportar Excel
+            </button>
+            <button
+              onClick={handleGeneratePDF}
+              className="flex items-center px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold hover:bg-blue-100 transition-colors"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Descargar PDF
+            </button>
+            <button
+              onClick={handleGeneratePDFByField}
+              className="flex items-center px-4 py-2 bg-purple-50 text-purple-600 rounded-xl text-xs font-bold hover:bg-purple-100 transition-colors"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              PDF por Campos
+            </button>
+            <button
+              onClick={() => setShowRefereeLoadModal(true)}
+              className="flex items-center px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-100 transition-colors"
+            >
+              <User className="w-4 h-4 mr-2" />
+              Estado de Carga
+            </button>
+            <button
+              onClick={() => setShowDeleteAllModal(true)}
+              className="flex items-center px-4 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition-colors"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Borrar Todo
+            </button>
+          </div>
+        </div>
+
+        {/* Draggable Referees Bar */}
+        <div className="mb-8 p-6 bg-slate-50 rounded-2xl border border-dashed border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                <GripVertical className="w-3.5 h-3.5 text-blue-600" />
+                Asignación Rápida (Arrastrar)
+              </h4>
+              <p className="text-[10px] text-slate-500 font-bold">Arrastra un árbitro a un partido para asignarlo</p>
+            </div>
+            <div className="flex gap-1">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+              <div className="w-2 h-2 bg-blue-300 rounded-full animate-pulse [animation-delay:0.2s]"></div>
+              <div className="w-2 h-2 bg-blue-100 rounded-full animate-pulse [animation-delay:0.4s]"></div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {referees.filter(r => r.status === 'active').sort((a,b) => a.name.localeCompare(b.name)).map((ref, idx) => {
+              const color = getRefereeColor(ref.id, idx);
+              return (
+                <div
+                  key={ref.id}
+                  draggable
+                  onDragStart={() => handleDragStart(ref.id)}
+                  onDragEnd={() => setDraggingRefereeId(null)}
+                  className={`
+                    px-4 py-2 rounded-xl border shadow-sm cursor-grab active:cursor-grabbing 
+                    flex items-center gap-2 transition-all group
+                    ${color.bg} ${color.text} ${color.border}
+                    ${draggingRefereeId === ref.id ? 'opacity-50 scale-95 border-blue-500 ring-2 ring-blue-100' : 'hover:shadow-md hover:brightness-95'}
+                  `}
+                >
+                  <GripVertical className={`w-3.5 h-3.5 opacity-50 group-hover:opacity-100 transition-opacity`} />
+                  <span className="text-xs font-black uppercase">{ref.name}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Group matches by period */}
         {Array.from(new Set(matches.map(m => m.period || 'Sin periodo'))).map(period => {
-          const periodMatches = matches.filter(m => (m.period || 'Sin periodo') === period);
+          const periodMatches = matches
+            .filter(m => (m.period || 'Sin periodo') === period)
+            .sort((a, b) => {
+              const dateComp = a.match_date.localeCompare(b.match_date);
+              if (dateComp !== 0) return dateComp;
+              const fieldComp = a.field.localeCompare(b.field);
+              if (fieldComp !== 0) return fieldComp;
+              return a.match_time.localeCompare(b.match_time);
+            });
           return (
             <div key={period} className="mb-8">
               <div className="flex items-center justify-between mb-4">
@@ -503,7 +1014,22 @@ export default function AdminCalendar() {
                       const teamB = teams.find(t => t.id === m.team_b_id);
                       const referee = referees.find(r => r.id === m.referee_id);
                       return (
-                        <tr key={m.id} className="text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                        <tr 
+                          key={m.id} 
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setDragOverMatchId(m.id);
+                          }}
+                          onDragLeave={() => setDragOverMatchId(null)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            handleDropOnMatch(m.id);
+                          }}
+                          className={`
+                            text-xs font-medium text-gray-600 transition-all duration-200
+                            ${dragOverMatchId === m.id ? 'bg-blue-50 scale-[1.01] shadow-inner ring-2 ring-blue-200 z-10' : 'hover:bg-gray-50'}
+                          `}
+                        >
                           <td className="px-4 py-3">
                             <div className="flex items-center">
                               <span className="text-[10px] text-gray-400 mr-2 font-bold w-6">#{index + 1}</span>
@@ -513,15 +1039,28 @@ export default function AdminCalendar() {
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-gray-900">{formatDateDisplay(m.match_date)}</span>
-                              <span className="text-[10px] text-gray-400 uppercase font-bold">{m.day_name}</span>
+                              <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase font-black tracking-tighter ${getDayColor(m.day_name)}`}>
+                                {m.day_name}
+                              </span>
                             </div>
                           </td>
                           <td className="px-4 py-3 font-bold text-gray-900">{formatTimeDisplay(m.match_time)}</td>
                           <td className="px-4 py-3">{m.field}</td>
-                          <td className="px-4 py-3 max-w-[150px] truncate">{m.competition}</td>
+                          <td className="px-4 py-3 max-w-[150px] truncate">
+                            {(m.competition || '').includes('-') ? (m.competition || '').split('-')[1].trim() : m.competition}
+                          </td>
                           <td className="px-4 py-3 font-bold text-gray-900">{teamA?.name || 'Desconocido'}</td>
                           <td className="px-4 py-3 font-bold text-gray-900">{teamB?.name || 'Desconocido'}</td>
-                          <td className="px-4 py-3 font-bold text-blue-600">{referee?.name || 'SIN ASIGNAR'}</td>
+                          <td className="px-4 py-3">
+                            {referee ? (
+                              <div className={`inline-flex items-center px-3 py-1 rounded-lg border text-[10px] font-black uppercase ${getRefereeColor(referee.id).bg} ${getRefereeColor(referee.id).text} ${getRefereeColor(referee.id).border}`}>
+                                <div className={`w-1.5 h-1.5 rounded-full mr-2 ${getRefereeColor(referee.id).dot}`}></div>
+                                {referee.name}
+                              </div>
+                            ) : (
+                              <span className="text-red-500 font-black text-[10px] uppercase">SIN ASIGNAR</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-right">
                             <button
                               onClick={() => setMatchToDelete(m.id)}
@@ -581,6 +1120,46 @@ export default function AdminCalendar() {
 
       {/* Modals */}
       <AnimatePresence>
+        {/* Reassignment Warning Modal */}
+        <AnimatePresence>
+          {showWarningModal && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="bg-white rounded-[2.5rem] p-10 max-w-sm w-full shadow-[0_30px_60px_rgba(0,0,0,0.3)] border border-gray-100 text-center relative overflow-hidden"
+              >
+                <div className="absolute top-0 left-0 w-full h-2 bg-amber-500"></div>
+                <div className="w-20 h-20 bg-amber-50 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner">
+                  <AlertCircle className="w-10 h-10 text-amber-600" />
+                </div>
+                <h3 className="text-2xl font-black text-gray-900 mb-3">Atención</h3>
+                <p className="text-sm text-gray-500 font-medium mb-10 leading-relaxed">
+                  {warningMessage}
+                </p>
+                <div className="space-y-3">
+                  <button
+                    onClick={handleConfirmWarning}
+                    className="w-full py-4 bg-amber-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-amber-200 hover:bg-amber-700 transition-all active:scale-95"
+                  >
+                    CONTINUAR Y ASIGNAR
+                  </button>
+                  <button
+                    onClick={() => {
+                        setShowWarningModal(false);
+                        setPendingReassignData(null);
+                    }}
+                    className="w-full py-4 bg-gray-100 text-gray-600 rounded-2xl font-black text-sm hover:bg-gray-200 transition-all active:scale-95"
+                  >
+                    CANCELAR
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
         {/* Delete All Confirmation */}
         {showDeleteAllModal && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -875,6 +1454,126 @@ export default function AdminCalendar() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+      
+      {/* Referee Load Modal */}
+      <AnimatePresence>
+        {showRefereeLoadModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[2.5rem] p-8 shadow-[0_30px_60px_rgba(0,0,0,0.3)] w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col relative"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h3 className="text-xl font-black text-gray-900">Estado de Carga de Árbitros</h3>
+                  <p className="text-sm text-gray-500 font-medium">Relación de horas asignadas vs disponibles</p>
+                </div>
+                <button 
+                  onClick={() => setShowRefereeLoadModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto flex-1 pr-2 custom-scrollbar">
+                <table className="w-full text-left">
+                  <thead className="sticky top-0 bg-white z-10">
+                    <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 italic">
+                      <th className="pb-3">Árbitro</th>
+                      <th className="pb-3 text-center">Asignados</th>
+                      <th className="pb-3 text-center">Disponibles</th>
+                      <th className="pb-3 text-center">Libres</th>
+                      <th className="pb-3 text-right">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {refereeLoadData.map((ref, idx) => (
+                      <tr key={idx} className="group hover:bg-slate-50 transition-colors">
+                        <td className="py-4 font-bold text-gray-900 text-sm uppercase">{ref.name}</td>
+                        <td className="py-4 text-center font-bold text-blue-600 font-mono">{ref.assignedCount}h</td>
+                        <td className="py-4 text-center font-bold text-gray-400 font-mono">{ref.totalSlots}h</td>
+                        <td className={`py-4 text-center font-bold font-mono ${ref.remaining > 0 ? 'text-emerald-600 bg-emerald-50/50' : 'text-gray-300'}`}>
+                          {ref.remaining}h
+                        </td>
+                        <td className="py-4 text-right">
+                          {ref.remaining > 0 ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 uppercase">
+                              Con Huecos
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-500 uppercase">
+                              Completo
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
+                <button
+                  onClick={() => setShowRefereeLoadModal(false)}
+                  className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all active:scale-95"
+                >
+                  CERRAR
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Internal Public Calendar Preview Modal */}
+      <AnimatePresence>
+        {showPublicPreview && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] bg-white flex flex-col"
+          >
+            <div className="bg-slate-900 px-6 py-4 flex items-center justify-between shadow-2xl relative z-[10000]">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-lg transform rotate-3">
+                  <Shield className="w-8 h-8 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider leading-tight">
+                    FUTBOL 7 LA AMISTAD | SANTA CRUZ DE TENERIFE
+                  </h3>
+                  <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">
+                    TEMPORADA 2025/2026
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="hidden md:block text-right">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Modo Vista Previa</p>
+                  <p className="text-[9px] text-slate-500 font-medium">Así verán los árbitros el calendario compartido</p>
+                </div>
+                <button 
+                  onClick={() => setShowPublicPreview(false)}
+                  className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black transition-all flex items-center gap-2 shadow-lg shadow-red-900/20 active:scale-95"
+                >
+                  <X className="w-4 h-4" />
+                  CERRAR
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex-grow overflow-y-auto bg-slate-50">
+              <div className="max-w-5xl mx-auto py-8 px-4">
+                 <PublicCalendar />
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

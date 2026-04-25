@@ -1,13 +1,13 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../store/DataContext';
-import { LogOut, LayoutDashboard, Users, Shield, Banknote, Calendar, Settings, Trophy, BarChart2 } from 'lucide-react';
+import { LogOut, LayoutDashboard, Users, Shield, Banknote, Calendar, Settings, Trophy, BarChart2, Zap, Calculator } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import Footer from '../Footer';
 import { formatDateDisplay } from '../../utils/formatters';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const { settings, matches } = useData();
   console.log('AdminLayout matches:', matches);
   const location = useLocation();
@@ -30,24 +30,36 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }
 
-  const navigation = [
-    { name: 'Panel Principal', href: '/admin', icon: LayoutDashboard },
+  const allNavigation = [
+    { name: 'Panel', href: '/admin', icon: LayoutDashboard },
     { name: 'Árbitros', href: '/admin/referees', icon: Users },
     { name: 'Equipos', href: '/admin/teams', icon: Shield },
-    { name: 'Gestión Liquidaciones', href: '/admin/payments', icon: Banknote },
-    { name: 'Equidad', href: '/admin/equity', icon: BarChart2 },
     { name: 'Calendario', href: '/admin/calendar', icon: Calendar },
+    { name: 'Asignaciones', href: '/admin/auto-assigner', icon: Zap },
+    { name: 'Equidad', href: '/admin/equity', icon: BarChart2 },
+    { name: 'Liquidaciones', href: '/admin/payments', icon: Banknote },
+    { name: 'Economía', href: '/admin/economic', icon: Calculator },
     { name: 'Configuración', href: '/admin/settings', icon: Settings },
   ];
 
+  const navigation = allNavigation.filter(item => {
+    if (user?.role === 'admin') return true;
+    if (user?.role === 'collaborator') {
+      return ['Panel', 'Árbitros', 'Equipos', 'Liquidaciones', 'Economía'].includes(item.name);
+    }
+    return false;
+  });
+
   const getNavColor = (name: string) => {
     switch (name) {
-      case 'Panel Principal': return 'text-indigo-500';
+      case 'Panel': return 'text-indigo-500';
       case 'Árbitros': return 'text-purple-500';
       case 'Equipos': return 'text-blue-500';
-      case 'Gestión Liquidaciones': return 'text-emerald-500';
-      case 'Equidad': return 'text-amber-500';
       case 'Calendario': return 'text-sky-500';
+      case 'Asignaciones': return 'text-pink-500'; // Nuevo color
+      case 'Equidad': return 'text-amber-500';
+      case 'Liquidaciones': return 'text-emerald-500';
+      case 'Economía': return 'text-orange-500';
       case 'Configuración': return 'text-slate-500';
       default: return 'text-slate-400';
     }

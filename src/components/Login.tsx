@@ -37,9 +37,10 @@ export default function Login() {
 
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (email) {
-      // En un entorno real, aquí se verificaría el email y contraseña
-      login('admin');
+    setError('');
+    const success = login({ username, password });
+    if (!success) {
+      setError('Credenciales incorrectas.');
     }
   };
 
@@ -269,18 +270,28 @@ export default function Login() {
               </div>
 
               <form onSubmit={handleAdminLogin} className="space-y-5">
+                {error && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs font-bold text-red-600 flex items-center"
+                  >
+                    <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+                    {error}
+                  </motion.div>
+                )}
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1.5">Email</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5">Usuario</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Mail className="h-5 w-5 text-gray-400" />
+                      <UserIcon className="h-5 w-5 text-gray-400" />
                     </div>
                     <input
-                      type="email"
+                      type="text"
                       required
-                      placeholder="tu@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Usuario"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
                       className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-50 shadow-inner transition-colors hover:bg-white"
                     />
                   </div>

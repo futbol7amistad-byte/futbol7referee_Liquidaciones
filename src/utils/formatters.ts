@@ -1,6 +1,13 @@
 export const formatDateDisplay = (dateStr: any) => {
   if (!dateStr) return '';
   
+  if (dateStr instanceof Date) {
+    const day = String(dateStr.getDate()).padStart(2, '0');
+    const month = String(dateStr.getMonth() + 1).padStart(2, '0');
+    const year = dateStr.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+  
   // Handle Excel serial dates (numbers)
   if (typeof dateStr === 'number' || (!isNaN(Number(dateStr)) && !String(dateStr).includes('-') && !String(dateStr).includes('/'))) {
     const serial = Number(dateStr);
