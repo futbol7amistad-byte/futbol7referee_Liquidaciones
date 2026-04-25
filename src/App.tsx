@@ -10,7 +10,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider } from './store/DataContext';
 import { Role } from './types';
 import Login from './components/Login';
-import AdminLayoutVertical from './components/admin/AdminLayoutVertical';
+import AdminLayoutContainer from './components/admin/AdminLayoutContainer';
 import AdminDashboard from './components/admin/AdminDashboard';
 import AdminReferees from './components/admin/AdminReferees';
 import AdminTeams from './components/admin/AdminTeams';
@@ -74,7 +74,7 @@ function AppRoutes() {
       
       <Route path="/admin/*" element={
         <PrivateRoute allowedRoles={['admin', 'collaborator']}>
-          <AdminLayoutVertical>
+          <AdminLayoutContainer>
             <Routes>
               <Route path="/" element={<AdminDashboard />} />
               <Route path="/referees" element={<AdminReferees />} />
@@ -95,7 +95,7 @@ function AppRoutes() {
               
               <Route path="*" element={<Navigate to="/admin" replace />} />
             </Routes>
-          </AdminLayoutVertical>
+          </AdminLayoutContainer>
         </PrivateRoute>
       } />
       
