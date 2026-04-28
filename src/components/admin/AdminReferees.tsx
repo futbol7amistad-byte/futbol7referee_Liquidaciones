@@ -1,14 +1,14 @@
 import React, { useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { useData } from '../../store/DataContext';
-import { Plus, Search, Edit2, Trash2, User, Upload, X, ChevronDown, MessageCircle, Zap } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, User, Upload, X, ChevronDown, MessageCircle, Zap, ShieldAlert } from 'lucide-react';
 import { Referee } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { fileToBase64 } from '../../utils/imageUtils';
 import { getWhatsAppLink } from '../../utils/whatsapp';
 
 export default function AdminReferees() {
-  const { referees, addReferee, updateReferee, deleteReferee } = useData();
+  const { referees, addReferee, updateReferee, deleteReferee, teams } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRefereeId, setSelectedRefereeId] = useState<string>('');
   const [showModal, setShowModal] = useState(false);
@@ -86,6 +86,7 @@ export default function AdminReferees() {
                   <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Credenciales</th>
                   <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Estado</th>
                   <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Horas</th>
+                  <th className="px-6 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Restricciones</th>
                   <th className="px-6 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Acciones</th>
                 </tr>
               </thead>
@@ -139,10 +140,46 @@ export default function AdminReferees() {
                             <span className="text-[10px] font-bold text-slate-400">L:{referee.disponibilidad?.Lunes?.length || 0} | M:{referee.disponibilidad?.Martes?.length || 0} | X:{referee.disponibilidad?.Miercoles?.length || 0} | J:{referee.disponibilidad?.Jueves?.length || 0}</span>
                         </div>
                     </td>
+                    <td className="px-6 py-5 whitespace-nowrap text-center">
+                      {(referee.preferences?.camposVetados?.length > 0 || referee.preferences?.equiposVetados?.length > 0) ? (
+                        <div className="relative flex justify-center group/tooltip">
+                          <button type="button" className="p-2 text-rose-500 bg-rose-50 rounded-full border border-rose-100 shadow-sm cursor-help">
+                            <ShieldAlert className="w-5 h-5" />
+                          </button>
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/tooltip:block w-64 p-3 bg-slate-900 text-white text-xs rounded-xl shadow-xl z-50 text-left border border-slate-700/50">
+                            <div className="mb-1 font-bold text-slate-300">Restricciones:</div>
+                            {referee.preferences?.camposVetados?.length > 0 && (
+                              <div className="mb-2">
+                                <span className="font-bold text-rose-400 block mb-1">Campos Vetados:</span>
+                                <ul className="list-disc pl-4 space-y-0.5 text-[10px] text-slate-200">
+                                  {referee.preferences.camposVetados.map((campo, i) => (
+                                    <li key={`cv-${i}`}>{campo}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {referee.preferences?.equiposVetados?.length > 0 && (
+                              <div>
+                                <span className="font-bold text-rose-400 block mb-1">Equipos Vetados:</span>
+                                <ul className="list-disc pl-4 space-y-0.5 text-[10px] text-slate-200 whitespace-normal">
+                                  {referee.preferences.equiposVetados.map((teamId, i) => {
+                                    const team = teams.find(t => t.id === teamId);
+                                    return <li key={`tv-${i}`} className="break-words">{team ? team.name : teamId}</li>;
+                                  })}
+                                </ul>
+                              </div>
+                            )}
+                            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-slate-900 rotate-45 border-r border-b border-slate-700/50"></div>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-slate-300 font-bold block text-center">-</span>
+                      )}
+                    </td>
                     <td className="px-6 py-5 whitespace-nowrap text-right">
                       <div className="flex justify-end gap-2">
                         <a
-                          href={getWhatsAppLink(referee.phone || '', `Hola ${referee.name}, aquí tienes tus credenciales para acceder a la app:\n\n*Usuario*: ${referee.username.toUpperCase()}\n*Contraseña*: ${referee.password || 'Sin contraseña'}\n\n*Guía de acceso y uso:*\n1. Accede aquí: https://futbol7referee-liquidaciones.vercel.app/\n2. Introduce tu *Usuario* y *Contraseña*.\n3. Una vez en el panel, comprueba o selecciona el *Periodo* correcto.\n4. Despliega el día de tus partidos y verifica que son los correctos.\n5. Selecciona \"PAGADO\" si abonan en campo, o indica el motivo del impago (Transferencia, Olvido, Otros) por cada equipo.\n6. Pulsa \"Guardar y Finalizar\". El partido pasará de estado \"Pendiente\" a \"Liquidado\".\n7. *¿Error?* Si te equivocas, pulsa el botón \"Editar\", corrige los datos y vuelve a \"Guardar y Finalizar\".\n\n*Tip*: Añade este enlace a la pantalla de inicio de tu móvil para acceder siempre directamente.`)}
+                          href={getWhatsAppLink(referee.phone || '', `LiquidF7 Pro (Ver. 20.0)\n\n⚠️ INSTRUCCIONES IMPORTANTES:\n\nHola ${referee.name.toUpperCase()}, aquí tienes tus credenciales para acceder a la app:\n\n*Usuario*: ${referee.username}\n\n*Contraseña*: ${referee.password || 'Sin contraseña'}\n\n*Guía de acceso y uso:*\n\n1. Accede aquí: 🔗 Portal del Árbitro: https://futbol7referee-liquidaciones.vercel.app/#/login\n\n2. Introduce tu *Usuario* y *Contraseña*.\n\n3. Una vez en el panel, comprueba o selecciona el *Periodo* correcto.\n\n4. Despliega el día de tus partidos y verifica que son los correctos.\n\n5. Selecciona "*PAGADO*" si abonan en campo, o *NO PAGADO* y, en este último caso, indica el motivo del impago (Transferencia, Olvido, Otros) por cada equipo.\n\n6. Pulsa "*Guardar y Finalizar*". El partido pasará de estado "*Pendiente*" a "*Liquidado*".\n\n7. *¿Error?* Si te equivocas, pulsa el botón "Editar", corrige los datos y vuelve a "Guardar y Finalizar".\n\n*Tip*: Recomendable añadir este enlace a la pantalla de inicio de tu móvil para acceder siempre directamente.`)}
                           target="whatsapp_admin"
                           rel="noopener noreferrer"
                           className={`w-10 h-10 items-center justify-center text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-all border border-emerald-200 shadow-sm hover:shadow-md ${referee.status === 'inactive' ? 'hidden' : 'flex'}`}
@@ -212,8 +249,8 @@ function RefereeModal({ referee, onClose, onSave }: { referee: Referee | null, o
     disponibilidad: referee?.disponibilidad || { Lunes: [], Martes: [], Miercoles: [], Jueves: [] }
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { teams } = useData(); // Necesitamos los equipos para el select
-  const campos = ["Tablero 1", "Tablero 2", "Campo Ext 1", "Campo Ext 2"]; // Debemos buscar una forma dinámica de obtener esto si fuera necesario
+  const { teams, matches } = useData(); // Necesitamos los equipos y partidos
+  const campos = [...new Set(matches.map(m => m.field).filter(Boolean))].sort();
 
   const generatePassword = () => {
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -335,6 +372,25 @@ function RefereeModal({ referee, onClose, onSave }: { referee: Referee | null, o
               </div>
 
               <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Campos Vetados</label>
+                <div className="h-24 overflow-y-auto bg-white p-3 rounded-xl border border-slate-200 text-[10px]">
+                  {campos.map(campo => (
+                    <label key={campo} className="flex items-center gap-2 mb-1">
+                      <input type="checkbox" checked={formData.preferences.camposVetados?.includes(campo)} onChange={(e) => {
+                          const newer = e.target.checked 
+                            ? [...(formData.preferences.camposVetados || []), campo] 
+                            : (formData.preferences.camposVetados || []).filter(c => c !== campo);
+                          setFormData({...formData, preferences: {...formData.preferences, camposVetados: newer}});
+                        }}
+                      />
+                      {campo}
+                    </label>
+                  ))}
+                  {campos.length === 0 && <div className="text-slate-400 italic">No hay campos registrados</div>}
+                </div>
+              </div>
+
+              <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Equipos Vetados</label>
                 <div className="h-24 overflow-y-auto bg-white p-3 rounded-xl border border-slate-200 text-[10px]">
                   {[...teams].sort((a,b) => a.name.localeCompare(b.name)).map(t => (
@@ -360,17 +416,19 @@ function RefereeModal({ referee, onClose, onSave }: { referee: Referee | null, o
                     }} className="text-[10px] text-indigo-600 font-bold hover:underline">Marcar todos</button>
                 </div>
                 <div className="bg-white p-3 rounded-xl border border-slate-200 text-[10px] space-y-2">
-                  {Object.keys(formData.disponibilidad).map(dia => (
+                  {['Lunes', 'Martes', 'Miercoles', 'Jueves'].map(dia => (
                     <div key={dia} className="flex gap-2 items-center">
                       <span className="w-16 font-bold">{dia}</span>
-                      <label className="flex items-center gap-1"><input type="checkbox" checked={formData.disponibilidad[dia].includes('20:30')} onChange={(e) => {
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={formData.disponibilidad[dia]?.includes('20:30') || false} onChange={(e) => {
                          const time = '20:30'; 
-                         const newer = e.target.checked ? [...formData.disponibilidad[dia], time] : formData.disponibilidad[dia].filter(t => t !== time);
+                         const existingDays = formData.disponibilidad[dia] || [];
+                         const newer = e.target.checked ? [...existingDays, time] : existingDays.filter(t => t !== time);
                          setFormData({...formData, disponibilidad: {...formData.disponibilidad, [dia]: newer}});
                       }}/> 20:30 </label>
-                      <label className="flex items-center gap-1"><input type="checkbox" checked={formData.disponibilidad[dia].includes('21:30')} onChange={(e) => {
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={formData.disponibilidad[dia]?.includes('21:30') || false} onChange={(e) => {
                          const time = '21:30'; 
-                         const newer = e.target.checked ? [...formData.disponibilidad[dia], time] : formData.disponibilidad[dia].filter(t => t !== time);
+                         const existingDays = formData.disponibilidad[dia] || [];
+                         const newer = e.target.checked ? [...existingDays, time] : existingDays.filter(t => t !== time);
                          setFormData({...formData, disponibilidad: {...formData.disponibilidad, [dia]: newer}});
                       }}/> 21:30 </label>
                     </div>

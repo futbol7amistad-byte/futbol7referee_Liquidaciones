@@ -206,27 +206,27 @@ function MatchCard({ match, getTeamName, getPaymentStatus, onSavePayment, onUpda
 
   const canEdit = !isLiquidated || isEditing;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if ((!localPaymentA.isPaid && !localPaymentA.reason) || (!localPaymentB.isPaid && !localPaymentB.reason)) {
       setShowErrorModal(true);
       return;
     }
 
-    onSavePayment({
+    await onSavePayment({
       match_id: match.id,
       team_id: match.team_a_id,
       amount: 35,
       is_paid: localPaymentA.isPaid,
       reason: localPaymentA.isPaid ? 'Metálico' : localPaymentA.reason
     });
-    onSavePayment({
+    await onSavePayment({
       match_id: match.id,
       team_id: match.team_b_id,
       amount: 35,
       is_paid: localPaymentB.isPaid,
       reason: localPaymentB.isPaid ? 'Metálico' : localPaymentB.reason
     });
-    onUpdateStatus(match.id, 'Liquidado');
+    await onUpdateStatus(match.id, 'Liquidado');
     setIsEditing(false);
   };
 

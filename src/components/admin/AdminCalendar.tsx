@@ -25,9 +25,10 @@ export default function AdminCalendar() {
 
   // Drag and Drop state
   const [draggingRefereeId, setDraggingRefereeId] = useState<string | null>(null);
+  const [draggingOriginMatchId, setDraggingOriginMatchId] = useState<string | null>(null);
   const [dragOverMatchId, setDragOverMatchId] = useState<string | null>(null);
 
-  const getRefereeColor = (id: string, index?: number) => {
+  const getRefereeColor = (id: string) => {
     const colors = [
       { bg: 'bg-indigo-500', text: 'text-white', border: 'border-indigo-600', dot: 'bg-white' },
       { bg: 'bg-emerald-500', text: 'text-white', border: 'border-emerald-600', dot: 'bg-white' },
@@ -47,13 +48,12 @@ export default function AdminCalendar() {
       { bg: 'bg-zinc-600', text: 'text-white', border: 'border-zinc-700', dot: 'bg-white' },
     ];
     
-    // Fallback: busca el índice por ID si no se proporciona
-    if (index === undefined) {
-      index = referees.findIndex(r => r.id === id);
-    }
+    // Create a stable sorted list to get the same index consistently
+    const sortedRefs = [...referees].filter(r => r.status === 'active').sort((a,b) => a.name.localeCompare(b.name));
+    let index = sortedRefs.findIndex(r => r.id === id);
     
     // Si no se encuentra (índice -1), usa el hash para un fallback determinista
-    if (index === undefined || index === -1) {
+    if (index === -1) {
         let hash = 0;
         for (let i = 0; i < id.length; i++) {
             hash = id.charCodeAt(i) + ((hash << 5) - hash);
@@ -100,10 +100,14 @@ export default function AdminCalendar() {
       message += `• ${formatTimeDisplay(m.match_time)} | ${m.field} | ${teamA} vs ${teamB} ➔ *${referee}*\n`;
     });
 
-    // Public link for referees: Simple query param for maximum compatibility
-    const baseUrl = window.location.href.split('#')[0].split('?')[0];
-    const publicLink = baseUrl + '?public';
-    message += `\n\n🔗 *Consulta completa aquí:* ${publicLink}`;
+    const refereeLink = "https://futbol7referee-liquidaciones.vercel.app/#/login";
+    message += `\n\n🔗 *Portal del Árbitro:* ${refereeLink}\n`;
+    message += `\n⚠️ *INSTRUCCIONES IMPORTANTES:*\n`;
+    message += `1. Revisa detenidamente tus designaciones detalladas arriba.\n`;
+    message += `2. Entra al enlace proporcionado con tu usuario y contraseña.\n`;
+    message += `3. Cumplimenta el acta digital al finalizar el partido directamente desde el móvil en el campo.\n`;
+    message += `4. Cierra el acta del partido para que el resultado quede registrado automáticamente.\n`;
+    message += `5. Si tienes algún problema con tu asignación, contacta urgente con la organización.\n`;
 
     window.open(getWhatsAppLink('', message), 'whatsapp_admin');
   };
@@ -118,39 +122,99 @@ export default function AdminCalendar() {
   const [warningMessage, setWarningMessage] = useState('');
   const [pendingReassignData, setPendingReassignData] = useState<{matchId: string, refId: string, both: boolean} | null>(null);
 
-  const handleDragStart = (refId: string) => {
+  const handleDragStart = (e: React.DragEvent, refId: string, originMatchId?: string) => {
+    if (e.dataTransfer) {
+      e.dataTransfer.setData('text/plain', refId);
+      e.dataTransfer.effectAllowed = 'move';
+    }
     setDraggingRefereeId(refId);
+    if (originMatchId) {
+      setDraggingOriginMatchId(originMatchId);
+    } else {
+      setDraggingOriginMatchId(null);
+    }
+  };
+
+  const handleRefereeDrag = (e: React.DragEvent) => {
+    const clientY = e.clientY;
+    const threshold = 150; // pixels from top/bottom to start scrolling
+    
+    const scrollContainer = document.getElementById('main-scroll-container');
+    if (!scrollContainer) return;
+
+    // Check if dragging (clientY is 0 when drag ends)
+    if (clientY > 0) {
+      if (clientY < threshold) {
+        scrollContainer.scrollBy({ top: -30, behavior: 'instant' });
+      } else if (window.innerHeight - clientY < threshold) {
+        scrollContainer.scrollBy({ top: 30, behavior: 'instant' });
+      }
+    }
   };
 
   const handleDropOnMatch = (matchId: string) => {
     if (draggingRefereeId) {
-      const match = matches.find(m => m.id === matchId);
-      if (match) {
-        // Check if referee already has matches that day
-        const hasMatchThatDay = matches.some(m => m.match_date === match.match_date && m.referee_id === draggingRefereeId);
+      const targetMatch = matches.find(m => m.id === matchId);
+      if (targetMatch) {
+          
+        if (draggingOriginMatchId && draggingOriginMatchId !== matchId) {
+            // WE ARE DRAGGING A REFEREE FROM ANOTHER MATCH (SWAP OR MOVE)
+            const originMatch = matches.find(m => m.id === draggingOriginMatchId);
+            
+            if (originMatch) {
+                // Determine if we should swap or just move. We swap if targetMatch has a referee.
+                const targetHasRef = targetMatch.referee_id && targetMatch.referee_id !== '' && targetMatch.referee_id !== 'r-unassigned' && targetMatch.referee_id !== 'SIN ASIGNAR' && targetMatch.referee_id !== 'r-0';
+                
+                if (targetHasRef) {
+                    // SWAP: origin gets target's ref, target gets origin's ref
+                    const targetOriginalRefId = targetMatch.referee_id;
+                    reassignReferee(originMatch.id, targetOriginalRefId);
+                    reassignReferee(targetMatch.id, draggingRefereeId);
+                    
+                    setDraggingRefereeId(null);
+                    setDraggingOriginMatchId(null);
+                    setDragOverMatchId(null);
+                    return;
+                } else {
+                    // JUST MOVE: origin gets empty, target gets the ref
+                    reassignReferee(originMatch.id, '');
+                    reassignReferee(targetMatch.id, draggingRefereeId);
+                    
+                    setDraggingRefereeId(null);
+                    setDraggingOriginMatchId(null);
+                    setDragOverMatchId(null);
+                    return;
+                }
+            }
+        }  
+          
+        // Normal assignment logic
+        // Check if referee already has matches that day (exclude the match they are being dropped into if they were somehow already there, and exclude origin if they were just moved)
+        const hasMatchThatDay = matches.some(m => m.match_date === targetMatch.match_date && m.referee_id === draggingRefereeId && m.id !== draggingOriginMatchId);
         
         if (hasMatchThatDay) {
           const refName = referees.find(r => r.id === draggingRefereeId)?.name || 'Este árbitro';
-          setWarningMessage(`${refName} ya tiene partidos asignados el día ${formatDateDisplay(match.match_date)}. ¿Deseas asignarlo de todos modos?`);
+          setWarningMessage(`${refName} ya tiene partidos asignados el día ${formatDateDisplay(targetMatch.match_date)}. ¿Deseas asignarlo de todos modos?`);
           setPendingReassignData({ matchId, refId: draggingRefereeId, both: false });
           setShowWarningModal(true);
           setDraggingRefereeId(null);
+          setDraggingOriginMatchId(null);
           setDragOverMatchId(null);
           return;
         }
 
         // Find if this match had an original referee who has a consecutive match
         const consecutive = matches.find(m => 
-          m.id !== match.id &&
-          m.match_date === match.match_date &&
-          m.field === match.field &&
-          m.referee_id === match.referee_id &&
+          m.id !== targetMatch.id &&
+          m.match_date === targetMatch.match_date &&
+          m.field === targetMatch.field &&
+          m.referee_id === targetMatch.referee_id &&
           m.referee_id !== '' &&
           m.referee_id !== 'r-unassigned'
         );
 
         if (consecutive) {
-          setReassignMatch(match);
+          setReassignMatch(targetMatch);
           setNewRefereeId(draggingRefereeId);
           setConsecutiveMatch(consecutive);
           setShowConsecutiveModal(true);
@@ -159,6 +223,7 @@ export default function AdminCalendar() {
         }
       }
       setDraggingRefereeId(null);
+      setDraggingOriginMatchId(null);
       setDragOverMatchId(null);
     }
   };
@@ -191,6 +256,7 @@ export default function AdminCalendar() {
   const [showDeletePeriodModal, setShowDeletePeriodModal] = useState<string | null>(null);
   const [matchToDelete, setMatchToDelete] = useState<string | null>(null);
   const [showErrorModal, setShowErrorModal] = useState<string | null>(null);
+  const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -243,12 +309,59 @@ export default function AdminCalendar() {
     link.click();
   };
 
+  const handleExportJSONForExtension = () => {
+    const exportData = matches.map(m => {
+      const referee = referees.find(r => r.id === m.referee_id)?.name || '';
+      const teamA = teams.find(t => t.id === m.team_a_id)?.name || m.team_a_name;
+      const teamB = teams.find(t => t.id === m.team_b_id)?.name || m.team_b_name;
+      return {
+        id: m.id,
+        team_a: teamA,
+        team_b: teamB,
+        round: m.match_round,
+        date: m.match_date, 
+        time: m.match_time, 
+        field: m.field,
+        referee: referee
+      };
+    });
+
+    try {
+      navigator.clipboard.writeText(JSON.stringify(exportData, null, 2))
+        .then(() => setActionSuccessMessage("¡Datos copiados al portapapeles! Abre la web de gestión, haz clic en el icono de la extensión y pégalos."))
+        .catch(() => fallbackJSONDownload(exportData));
+    } catch {
+      fallbackJSONDownload(exportData);
+    }
+  };
+
+  const fallbackJSONDownload = (exportData: any) => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData));
+    const link = document.createElement('a');
+    link.setAttribute("href", dataStr);
+    link.setAttribute("download", "partidos_extension.json");
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setActionSuccessMessage("No se ha podido copiar al portapapeles por seguridad del navegador, pero se ha descargado un pequeño archivo .json con los datos listos para importar en la extensión.");
+  };
+
   const addPdfHeader = (doc: jsPDF, docMatches: Match[]) => {
     doc.setFontSize(16);
     doc.setTextColor(0, 0, 0);
     doc.text("CAMPEONATO DE FUTBOL 7 LA AMISTAD | SANTA CRUZ DE TENERIFE", 105, 12, { align: 'center' });
     doc.setFontSize(9);
-    doc.text(`Jornada correspondiente al periodo del ${formatDateDisplay(docMatches[0]?.match_date || '')} al ${formatDateDisplay(docMatches[docMatches.length-1]?.match_date || '')}`, 105, 18, { align: 'center' });
+    
+    // Find min and max dates for accurate header
+    let minDate = '';
+    let maxDate = '';
+    if (docMatches.length > 0) {
+        const sortedDates = [...docMatches].map(m => m.match_date).sort();
+        minDate = sortedDates[0];
+        maxDate = sortedDates[sortedDates.length - 1];
+    }
+    
+    doc.text(`Jornada correspondiente al periodo del ${formatDateDisplay(minDate)} al ${formatDateDisplay(maxDate)}`, 105, 18, { align: 'center' });
   };
 
   const handleGeneratePDFByField = () => {
@@ -464,7 +577,7 @@ export default function AdminCalendar() {
       
       const mappedMatches = dataRows.filter(row => row.length > 0).map((row: any[]) => {
         const getVal = (possibleHeaders: string[]) => {
-          const index = headers.findIndex(h => possibleHeaders.includes(h));
+          const index = headers.findIndex(h => possibleHeaders.some(ph => ph.toLowerCase() === h.toLowerCase()));
           const val = index !== -1 ? row[index] : '';
           return (val === undefined || val === null) ? '' : String(val).trim();
         };
@@ -473,10 +586,10 @@ export default function AdminCalendar() {
         const teamBName = getVal(['EquipoB', 'Equipo B', 'Equipo Visitante', 'Visitante']);
         const refereeName = getVal(['Arbitro', 'Árbitro', 'Arbitro ', 'Referee']);
         const field = getVal(['Campo', 'Lugar', 'Pista']);
-        const competition = getVal(['Categoría', 'Categoria', 'Division', 'Competicion']);
+        const competition = getVal(['Categoría', 'Categoria', 'Division', 'Competicion', 'Grupo']);
         const round = getVal(['Jornada', 'Semana', 'Round']);
         const time = getVal(['Hora', 'Horario']);
-        const dayNameRaw = getVal(['Dia de la Semana', 'Día de la Semana', 'Dia', 'Día']);
+        const dayNameRaw = getVal(['Dia de la Semana', 'Día de la Semana', 'Dia', 'Día', 'Día Sem.']);
         const dateRaw = getVal(['Fecha', 'Date']);
 
         // Find team IDs by name (for preview)
@@ -519,7 +632,33 @@ export default function AdminCalendar() {
         };
       }).filter(m => m.team_a_name && m.team_b_name); // Only keep valid matches
 
+      if (mappedMatches.length === 0) {
+        setShowErrorModal('No se han encontrado encuentros en el archivo. Asegúrate de que las columnas tengan los nombres correctos (Equipo Local, Equipo Visitante, etc.).');
+        return;
+      }
+
       setTempMatches(mappedMatches);
+      
+      // Auto-set the date range based on the loaded matches
+      if (mappedMatches.length > 0) {
+        // Find valid dates
+        const dates = mappedMatches.map(m => {
+          // If match_date is in YYYY-MM-DD format
+          const [y, mm, d] = m.match_date.split('-');
+          if (y && mm && d) {
+             return new Date(parseInt(y), parseInt(mm)-1, parseInt(d));
+          }
+          return new Date(m.match_date);
+        }).filter(d => !isNaN(d.getTime()));
+        
+        if (dates.length > 0) {
+          const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+          const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+          setStartDate(minDate);
+          setEndDate(maxDate);
+          setCurrentMonth(minDate);
+        }
+      }
     };
     reader.readAsArrayBuffer(file);
   };
@@ -929,7 +1068,7 @@ export default function AdminCalendar() {
         </div>
 
         {/* Draggable Referees Bar */}
-        <div className="mb-8 p-6 bg-slate-50 rounded-2xl border border-dashed border-gray-200">
+        <div className="sticky top-4 z-[40] mb-8 p-6 bg-slate-50/95 backdrop-blur shadow-md rounded-2xl border border-dashed border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
@@ -946,12 +1085,13 @@ export default function AdminCalendar() {
           </div>
           <div className="flex flex-wrap gap-2">
             {referees.filter(r => r.status === 'active').sort((a,b) => a.name.localeCompare(b.name)).map((ref, idx) => {
-              const color = getRefereeColor(ref.id, idx);
+              const color = getRefereeColor(ref.id);
               return (
                 <div
                   key={ref.id}
                   draggable
-                  onDragStart={() => handleDragStart(ref.id)}
+                  onDragStart={(e) => handleDragStart(e, ref.id)}
+                  onDrag={handleRefereeDrag}
                   onDragEnd={() => setDraggingRefereeId(null)}
                   className={`
                     px-4 py-2 rounded-xl border shadow-sm cursor-grab active:cursor-grabbing 
@@ -1053,7 +1193,17 @@ export default function AdminCalendar() {
                           <td className="px-4 py-3 font-bold text-gray-900">{teamB?.name || 'Desconocido'}</td>
                           <td className="px-4 py-3">
                             {referee ? (
-                              <div className={`inline-flex items-center px-3 py-1 rounded-lg border text-[10px] font-black uppercase ${getRefereeColor(referee.id).bg} ${getRefereeColor(referee.id).text} ${getRefereeColor(referee.id).border}`}>
+                              <div 
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, referee.id, m.id)}
+                                onDrag={handleRefereeDrag}
+                                onDragEnd={() => {
+                                  setDraggingRefereeId(null);
+                                  setDraggingOriginMatchId(null);
+                                }}
+                                className={`inline-flex items-center px-3 py-1 rounded-lg border text-[10px] font-black uppercase cursor-grab active:cursor-grabbing transition-opacity ${draggingRefereeId === referee.id && draggingOriginMatchId === m.id ? 'opacity-50' : 'hover:opacity-90'} ${getRefereeColor(referee.id).bg} ${getRefereeColor(referee.id).text} ${getRefereeColor(referee.id).border}`}
+                              >
+                                <GripVertical className="w-3 h-3 mr-1 opacity-50" />
                                 <div className={`w-1.5 h-1.5 rounded-full mr-2 ${getRefereeColor(referee.id).dot}`}></div>
                                 {referee.name}
                               </div>
@@ -1574,6 +1724,34 @@ export default function AdminCalendar() {
               </div>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Action Success Modal */}
+      <AnimatePresence>
+        {actionSuccessMessage && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[2.5rem] p-10 shadow-[0_30px_60px_rgba(0,0,0,0.3)] w-full max-w-sm text-center relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500"></div>
+              <div className="w-20 h-20 bg-emerald-50 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner">
+                <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+              </div>
+              <h3 className="text-2xl font-black text-gray-900 mb-3">¡Completado!</h3>
+              <p className="text-sm text-gray-500 font-medium mb-10 leading-relaxed">
+                {actionSuccessMessage}
+              </p>
+              <button
+                onClick={() => setActionSuccessMessage(null)}
+                className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black text-sm shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition-all active:scale-95"
+              >
+                ENTENDIDO
+              </button>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

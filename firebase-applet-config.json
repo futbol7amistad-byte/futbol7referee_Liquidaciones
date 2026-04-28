@@ -1,10 +1,10 @@
 {
-  "projectId": "gen-lang-client-0213778672",
-  "appId": "1:803810234661:web:99cd62ea3146e3861a8acc",
-  "apiKey": "AIzaSyC0Jv0GTvloZmhcXlyJBMndBy7_oNXvI34",
-  "authDomain": "gen-lang-client-0213778672.firebaseapp.com",
+  "projectId": "futbol7amistad-prod",
+  "appId": "1:827987830069:web:b7c6e303317e68b3cf587c",
+  "apiKey": "AIzaSyC-C_BD_JlN5jiW5ESIdEPaiVjnAe9VrhE",
+  "authDomain": "futbol7amistad-prod.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-6d8d35df-97f2-4658-83e4-0bba4bb8b0d9",
-  "storageBucket": "gen-lang-client-0213778672.firebasestorage.app",
-  "messagingSenderId": "803810234661",
+  "storageBucket": "futbol7amistad-prod.firebasestorage.app",
+  "messagingSenderId": "827987830069",
   "measurementId": ""
 }

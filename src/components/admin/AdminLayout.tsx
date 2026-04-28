@@ -68,7 +68,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200/60 sticky top-0 z-50 shadow-sm">
+      <header className="bg-white border-b border-slate-200/60 sticky top-0 z-50 shadow-sm print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
             {settings.logo_url ? (
@@ -110,7 +110,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </header>
 
       {/* Primary Navigation */}
-      <div className="bg-white border-b border-slate-200/60 overflow-x-auto scrollbar-hide">
+      <div className="bg-white border-b border-slate-200/60 overflow-x-auto scrollbar-hide print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="flex items-center h-16 gap-1">
             {navigation.map((item) => {
@@ -136,11 +136,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
 
       {/* Main Content */}
-      <main className="flex-grow max-w-7xl w-full mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <main className="flex-grow max-w-7xl w-full mx-auto py-8 px-4 sm:px-6 lg:px-8 print:p-0 print:py-0">
         {children}
       </main>
 
-      <Footer />
+      <div className="print:hidden">
+        <Footer />
+      </div>
     </div>
   );
 }

@@ -194,47 +194,28 @@ export default function AdminSettlements() {
 
     if (type === 'fields' || type === 'full') {
       let startY = type === 'full' ? (doc as any).lastAutoTable?.finalY + 15 : 60;
-      
-      const matchesByField = filteredMatches.reduce((acc, m) => {
-        const fieldName = m.field || 'Sin campo';
-        if (!acc[fieldName]) acc[fieldName] = [];
-        acc[fieldName].push(m);
-        return acc;
-      }, {} as Record<string, any[]>);
 
-      // Iterate through fields and matches to print table for each
-      const sortedFieldNames = Object.keys(matchesByField).sort();
-      for (const fieldName of sortedFieldNames) {
-        const fieldMatches = matchesByField[fieldName];
-        
-        // If it's not the first field, start new page
-        if (fieldName !== sortedFieldNames[0]) {
-            doc.addPage();
-        }
-        
-        // Add header
-        addSharedHeader(doc);
-        const sectionStartY = 55;
-
-        doc.setFontSize(14);
-        doc.setTextColor(79, 70, 229);
-        doc.text(`CAMPO: ${String(fieldName || '').toUpperCase()}`, 14, sectionStartY);
-        
-        autoTable(doc, {
-          startY: sectionStartY + 5,
-          head: [['J', 'FECHA', 'HORA', 'ENCUENTRO']],
-          body: fieldMatches.map(m => [
-            m.jornada || '-',
-            m.match_date ? format(parseISO(m.match_date), 'dd/MM/yyyy') : '-',
-            m.match_time || '-',
-            `${teams.find(t => t.id === m.team_a_id)?.name || '?' } vs ${teams.find(t => t.id === m.team_b_id)?.name || '?'}`
-          ]),
-          theme: 'grid',
-          headStyles: { fillColor: [16, 185, 129] },
-        });
-        
-        startY = (doc as any).lastAutoTable?.finalY + 10;
+      if (type === 'full') {
+         doc.setFontSize(16);
+         doc.setTextColor(16, 185, 129);
+         doc.text('RESUMEN DE CAMPOS', 14, startY);
+         startY += 10;
       }
+      
+      autoTable(doc, {
+        startY,
+        head: [['CAMPO', 'HORAS / PARTIDOS', 'TARIFA / HORA', 'TOTAL LIQUIDACIÓN']],
+        body: fieldSettlements.map(f => [
+          f.name,
+          f.matchCount.toString(),
+          `${f.rate.toFixed(2)} €`,
+          `${f.totalAmount.toFixed(2)} €`
+        ]),
+        foot: [[{ content: 'TOTAL GASTO CAMPOS', colSpan: 3, styles: { halign: 'right' } }, `${totalFieldExpense.toFixed(2)} €`]],
+        theme: 'grid',
+        headStyles: { fillColor: [16, 185, 129] },
+        footStyles: { fillColor: [15, 23, 42] }
+      });
     }
 
     doc.save(`Liquidaciones_${type}_${dateRange.start}_${dateRange.end}.pdf`);
@@ -664,7 +645,7 @@ function AccountingAudit({ transactions, accounts }: any) {
             <tbody className="divide-y divide-slate-50">
               {transactions.slice(0, 15).map((t: any) => (
                 <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 text-[11px] font-bold text-slate-500">{format(parseISO(t.date), 'dd/MM/yy')}</td>
+                  <td className="px-6 py-4 text-[11px] font-bold text-slate-500">{format(parseISO(t.date), 'dd/MM/yyyy')}</td>
                   <td className="px-6 py-4">
                     <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${t.isAutomated ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-600'}`}>
                       {t.isAutomated ? 'Auto' : 'Manual'}

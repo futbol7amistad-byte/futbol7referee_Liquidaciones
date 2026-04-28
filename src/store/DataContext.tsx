@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Match, MatchPayment, Referee, Team, CashDelivery, Sanction, AccountingAccount, AccountingTransaction, EconomicSettings, TeamEconomicStatus } from '../types';
 import { useSeason } from '../contexts/SeasonContext';
 import { db } from '../lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, setDoc, writeBatch, getDocs, orderBy, where } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, setDoc, writeBatch, getDocs, getDoc, orderBy, where } from 'firebase/firestore';
 
 interface DataContextType {
   matches: Match[];
@@ -15,7 +15,7 @@ interface DataContextType {
   transactions: AccountingTransaction[];
   economicSettings: EconomicSettings;
   teamEconomicStatus: TeamEconomicStatus[];
-  addPayment: (payment: Omit<MatchPayment, 'id' | 'created_at'>) => void;
+  addPayment: (payment: Omit<MatchPayment, 'id' | 'created_at'>) => Promise<void>;
   addDelivery: (delivery: Omit<CashDelivery, 'id' | 'created_at'>) => void;
   addReferee: (referee: Omit<Referee, 'id'>) => void;
   updateReferee: (id: string, data: Partial<Referee>) => void;
@@ -34,7 +34,7 @@ interface DataContextType {
   showPeriod: (period: string) => void;
   addTeam: (data: Partial<Team>) => Promise<string>;
   updateTeam: (id: string, data: Partial<Team>) => Promise<void>;
-  updateMatchStatus: (matchId: string, status: 'Programado' | 'Liquidado') => void;
+  updateMatchStatus: (matchId: string, status: 'Programado' | 'Liquidado') => Promise<void>;
   assignmentResults: any[];
   setAssignmentResults: (results: any[]) => void;
   settings: AppSettings;
@@ -47,6 +47,8 @@ interface DataContextType {
   addTransaction: (transaction: Omit<AccountingTransaction, 'id' | 'created_at'>) => void;
   updateEconomicSettings: (settings: Partial<EconomicSettings>) => void;
   updateTeamEconomicStatus: (teamId: string, status: Partial<TeamEconomicStatus>) => void;
+  clearAllEconomicData: () => Promise<void>;
+  syncMatchAccounting: (matchId: string) => Promise<void>;
 }
 
 export interface AppSettings {
@@ -54,6 +56,11 @@ export interface AppSettings {
   season: string;
   backup_frequency?: 'none' | 'weekly' | 'monthly';
   last_backup_date?: string;
+  autoAssignerConfig?: {
+    weeklySlots: Record<string, Record<string, number>>;
+    inactiveRefs: string[];
+    mandatoryDays: Record<string, string[]>;
+  };
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -125,8 +132,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
     const handleError = (err: any) => {
       console.error("Firestore error:", err);
-      if (err.message.toLowerCase().includes('quota')) {
-        setError("Límite de lecturas alcanzado (Quota exceeded). Algunos datos podrían no cargarse.");
+      if (err.message.toLowerCase().includes('quota') || err.message.toLowerCase().includes('resource-exhausted')) {
+        setError("Límite diario de lecturas superado. Tus datos ESTÁN A SALVO y no se han borrado, pero Google ha bloqueado temporalmente el acceso. El límite se reiniciará automáticamente esta medianoche (hora del Pacífico, aprox 9:00 AM en España). Para soluciones inmediatas, contáctanos.");
       } else if (err.message.toLowerCase().includes('permission-denied')) {
         setError("Error de permisos: No tienes acceso a los datos de la temporada actual.");
       }
@@ -184,6 +191,104 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     };
   }, [currentSeason]);
 
+  const syncMatchAccounting = async (matchId: string) => {
+    if (!currentSeason) return;
+    
+    const seasonRef = doc(db, 'seasons', currentSeason.id);
+    
+    // 1. First, fetch and clear existing automated transactions for this match
+    // Simplified query to avoid index requirements
+    const txQuery = query(
+      collection(seasonRef, 'accounting_transactions'), 
+      where('relatedMatchId', '==', matchId)
+    );
+    const txSnapshot = await getDocs(txQuery);
+    
+    const batch = writeBatch(db);
+    txSnapshot.docs.forEach(d => {
+      const data = d.data();
+      if (data.isAutomated === true) {
+        batch.delete(d.ref);
+      }
+    });
+    
+    // 2. If the match exists and is liquidated, re-create the transactions
+    const matchSnap = await getDoc(doc(seasonRef, 'matches', matchId));
+    
+    if (matchSnap.exists()) {
+      const matchDoc = { id: matchSnap.id, ...matchSnap.data() } as Match;
+      
+      if (matchDoc.status === 'Liquidado') {
+        const refereeDoc = referees.find(r => r.id === matchDoc.referee_id);
+        
+        // 1. Referee Payment (Gasto)
+        if (economicSettings.referee_payment_standard > 0) {
+          const account = accounts.find(a => a && a.name.toLowerCase().includes('arbitraje') && a.type === 'Gasto');
+          if (account) {
+            const txRef = doc(collection(seasonRef, 'accounting_transactions'));
+            batch.set(txRef, {
+              date: matchDoc.match_date,
+              amount: economicSettings.referee_payment_standard,
+              accountId: account.id,
+              description: `Arbitraje: ${matchDoc.field} - ${refereeDoc?.name || 'Árbitro'} (J.${matchDoc.match_round})`,
+              relatedMatchId: matchId,
+              isAutomated: true,
+              type: 'Gasto',
+              created_at: new Date().toISOString()
+            });
+          }
+        }
+
+        // 2. Venue Rental (Gasto)
+        const venueRate = economicSettings.venue_costs?.find(v => v.venue_name === matchDoc.field)?.hourly_rate || 0;
+        if (venueRate > 0) {
+          const venueAccount = accounts.find(a => a && a.name.toLowerCase().includes('instalaciones') && a.type === 'Gasto');
+          if (venueAccount) {
+            const txRef = doc(collection(seasonRef, 'accounting_transactions'));
+            batch.set(txRef, {
+              date: matchDoc.match_date,
+              amount: venueRate,
+              accountId: venueAccount.id,
+              description: `Alquiler Campo: ${matchDoc.field} (J.${matchDoc.match_round})`,
+              relatedMatchId: matchId,
+              isAutomated: true,
+              type: 'Gasto',
+              created_at: new Date().toISOString()
+            });
+          }
+        }
+
+        // 3. Match Income (Ingreso)
+        const incomeAccount = accounts.find(a => a && a.name.toLowerCase().includes('partidos') && a.type === 'Ingreso');
+        if (incomeAccount) {
+          const paymentsQuery = query(collection(seasonRef, 'payments'), where('match_id', '==', matchId));
+          const paymentsSnapshot = await getDocs(paymentsQuery);
+          const matchPayments = paymentsSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as MatchPayment));
+
+          for (const p of matchPayments) {
+            if (p.is_paid) {
+              const teamName = teams.find(t => t.id === p.team_id)?.name || 'Equipo';
+              const txRef = doc(collection(seasonRef, 'accounting_transactions'));
+              batch.set(txRef, {
+                date: matchDoc.match_date,
+                amount: p.amount,
+                accountId: incomeAccount.id,
+                description: `Ingreso Partido J.${matchDoc.match_round}: ${teamName} (${matchDoc.field})`,
+                relatedMatchId: matchId,
+                relatedTeamId: p.team_id,
+                isAutomated: true,
+                type: 'Ingreso',
+                created_at: new Date().toISOString()
+              });
+            }
+          }
+        }
+      }
+    }
+    
+    await batch.commit();
+  };
+
   const addPayment = async (payment: Omit<MatchPayment, 'id' | 'created_at'>) => {
     if (!currentSeason) return;
     const paymentId = `${payment.match_id}_${payment.team_id}`;
@@ -191,6 +296,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       ...payment,
       created_at: new Date().toISOString(),
     });
+
+    // Automatically sync accounting if the match is already liquidated
+    // This handles the "confirmación de pago posteriori" case
+    const matchRef = doc(db, 'seasons', currentSeason.id, 'matches', payment.match_id);
+    const matchSnap = await getDoc(matchRef);
+    if (matchSnap.exists() && matchSnap.data().status === 'Liquidado') {
+      await syncMatchAccounting(payment.match_id);
+    }
   };
 
   const addDelivery = async (delivery: Omit<CashDelivery, 'id' | 'created_at'>) => {
@@ -336,6 +449,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const reassignReferee = async (matchId: string, refereeId: string) => {
     if (!currentSeason) return;
     await updateDoc(doc(db, 'seasons', currentSeason.id, 'matches', matchId), { referee_id: refereeId });
+    await syncMatchAccounting(matchId);
   };
 
   const clearMatchesInRange = async (startDate: string, endDate: string) => {
@@ -382,64 +496,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (!currentSeason) return;
     await updateDoc(doc(db, 'seasons', currentSeason.id, 'matches', matchId), { status });
     
-    // Auto-generate accounting entries if settled
-    if (status === 'Liquidado') {
-      const matchDoc = matches.find(m => m.id === matchId);
-      if (!matchDoc) return;
-
-      const refereeDoc = referees.find(r => r.id === matchDoc.referee_id);
-      
-      // 1. Referee Payment (Gasto)
-      if (economicSettings.referee_payment_standard > 0) {
-        const account = accounts.find(a => a.name.toLowerCase().includes('arbitraje') && a.type === 'Gasto');
-        if (account) {
-          await addTransaction({
-            date: matchDoc.match_date,
-            amount: economicSettings.referee_payment_standard,
-            accountId: account.id,
-            description: `Arbitraje: ${matchDoc.field} - ${refereeDoc?.name || 'Árbitro'} (J.${matchDoc.match_round})`,
-            relatedMatchId: matchId,
-            isAutomated: true,
-            type: 'Gasto'
-          });
-        }
-      }
-
-      // 2. Venue Rental (Gasto)
-      const venueRate = economicSettings.venue_costs?.find(v => v.venue_name === matchDoc.field)?.hourly_rate || 0;
-      if (venueRate > 0) {
-        const venueAccount = accounts.find(a => a.name.toLowerCase().includes('instalaciones') && a.type === 'Gasto');
-        if (venueAccount) {
-          await addTransaction({
-            date: matchDoc.match_date,
-            amount: venueRate,
-            accountId: venueAccount.id,
-            description: `Alquiler Campo: ${matchDoc.field} (J.${matchDoc.match_round})`,
-            relatedMatchId: matchId,
-            isAutomated: true,
-            type: 'Gasto'
-          });
-        }
-      }
-
-      // 3. Match Income (Ingreso)
-      const matchPayments = payments.filter(p => p.match_id === matchId && p.is_paid);
-      const totalIncome = matchPayments.reduce((acc, p) => acc + p.amount, 0);
-      if (totalIncome > 0) {
-        const incomeAccount = accounts.find(a => a.name.toLowerCase().includes('partidos') && a.type === 'Ingreso');
-        if (incomeAccount) {
-          await addTransaction({
-            date: matchDoc.match_date,
-            amount: totalIncome,
-            accountId: incomeAccount.id,
-            description: `Ingresos Recaudados J.${matchDoc.match_round}: ${matchDoc.field}`,
-            relatedMatchId: matchId,
-            isAutomated: true,
-            type: 'Ingreso'
-          });
-        }
-      }
-    }
+    // Auto-generate accounting entries (Sync handles both creation and correction/rollback)
+    await syncMatchAccounting(matchId);
   };
 
   const addAccountingAccount = async (account: Omit<AccountingAccount, 'id'>) => {
@@ -475,6 +533,40 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     await setDoc(doc(db, 'seasons', currentSeason.id, 'team_economic_status', teamId), status, { merge: true });
   };
 
+  const clearAllEconomicData = async () => {
+    if (!currentSeason) return;
+    
+    const batch = writeBatch(db);
+    const seasonRef = doc(db, 'seasons', currentSeason.id);
+
+    // List of collections to clear
+    const collectionsToClear = [
+      'payments',
+      'deliveries',
+      'sanctions',
+      'accounting_transactions',
+      'team_economic_status'
+    ];
+
+    for (const colName of collectionsToClear) {
+      const snapshot = await getDocs(collection(seasonRef, colName));
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+    }
+
+    // Reset financial counters in Teams
+    const teamsSnapshot = await getDocs(collection(seasonRef, 'teams'));
+    teamsSnapshot.docs.forEach(doc => {
+      batch.update(doc.ref, {
+        total_sanctions: 0,
+        pending_amount: 0
+      });
+    });
+
+    await batch.commit();
+  };
+
   return (
     <DataContext.Provider value={{ 
       matches, payments, referees, teams, deliveries, sanctions,
@@ -486,7 +578,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       settings, updateSettings, updateMatchStatus,
       hiddenPeriods, hidePeriod, showPeriod,
       error, clearError: () => setError(null),
-      addAccountingAccount, updateAccountingAccount, deleteAccountingAccount, addTransaction, updateEconomicSettings, updateTeamEconomicStatus
+      addAccountingAccount, updateAccountingAccount, deleteAccountingAccount, addTransaction, updateEconomicSettings, updateTeamEconomicStatus,
+      clearAllEconomicData, syncMatchAccounting
     }}>
       {error && (
         <div className="fixed top-4 right-4 z-[9999] max-w-sm">

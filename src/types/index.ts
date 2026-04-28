@@ -83,6 +83,13 @@ export interface CashDelivery {
 export interface AppSettings {
   logo_url: string;
   season: string;
+  backup_frequency?: 'none' | 'weekly' | 'monthly';
+  last_backup_date?: string;
+  autoAssignerConfig?: {
+    weeklySlots: Record<string, Record<string, number>>;
+    inactiveRefs: string[];
+    mandatoryDays: Record<string, string[]>;
+  };
 }
 
 export interface AccountingAccount {

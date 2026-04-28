@@ -249,7 +249,7 @@ export default function AdminLayoutContainer({ children }: { children: React.Rea
       )}
 
       {/* Main Content Area */}
-      <main className="flex-grow min-w-0 flex flex-col h-screen overflow-y-auto bg-[#F8FAFC]">
+      <main id="main-scroll-container" className="flex-grow min-w-0 flex flex-col h-screen overflow-y-auto bg-[#F8FAFC]">
         {showBackupReminder && (
           <div className="bg-amber-100/50 border-b border-amber-200 px-4 py-3 shrink-0">
              <div className="max-w-7xl mx-auto flex items-center justify-between">

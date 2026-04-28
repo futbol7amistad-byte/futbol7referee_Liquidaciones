@@ -19,32 +19,47 @@ export const normalizeString = (s: any) => {
 
 export const isRefereeAvailable = (ref: Referee, match: Match, session: AssignmentSession): boolean => {
   const prefs = ref.preferences || { nivel: 3, camposVetados: [], equiposVetados: [] };
-  const disp = ref.disponibilidad || {};
-
   const dayName = normalizeString(match.day_name);
-  const dispKey = Object.keys(disp).find(k => normalizeString(k) === dayName);
-  
-  if (!dispKey) return false;
-  
-  const refereeAvailability = disp[dispKey] || [];
-  const normalizedMatchTime = normalizeString(match.match_time);
-  
-  // Búsqueda flexible: exacta, contenida o por proximidad horaria simple (HH:MM)
-  const isTimeMatch = refereeAvailability.some(t => {
-      const nt = normalizeString(t);
-      if (nt === normalizedMatchTime || nt.includes(normalizedMatchTime)) return true;
-      
-      // Si el formato es un rango "20:30-22:30"
-      if (nt.includes(':') && nt.length > 5) {
-          const parts = t.split(/[-–—]/);
-          if (parts.length === 2) {
-              const start = normalizeString(parts[0]);
-              const end = normalizeString(parts[1]);
-              return normalizedMatchTime >= start && normalizedMatchTime <= end;
-          }
+
+  let daySlotsFromExcel: number | undefined;
+  if (session.weeklySlots && session.weeklySlots[ref.id]) {
+      const matchDayKey = Object.keys(session.weeklySlots[ref.id]).find(k => normalizeString(k) === dayName);
+      if (matchDayKey && session.weeklySlots[ref.id][matchDayKey] !== undefined) {
+          daySlotsFromExcel = session.weeklySlots[ref.id][matchDayKey];
       }
-      return false;
-  });
+  }
+
+  // If weeklySlots from Excel are provided for this day, bypass the strict time check and use day limits
+  let isTimeMatch = false;
+  
+  if (daySlotsFromExcel !== undefined) {
+      if (daySlotsFromExcel > 0) {
+          isTimeMatch = true;
+      }
+  } else {
+      // Fallback to original strict time matching based on referee's permanent availability
+      const disp = ref.disponibilidad || {};
+      const dispKey = Object.keys(disp).find(k => normalizeString(k) === dayName);
+      
+      if (!dispKey) return false;
+      
+      const refereeAvailability = disp[dispKey] || [];
+      const normalizedMatchTime = normalizeString(match.match_time);
+      
+      isTimeMatch = refereeAvailability.some(t => {
+          const nt = normalizeString(t);
+          if (nt === normalizedMatchTime || nt.includes(normalizedMatchTime)) return true;
+          if (nt.includes(':') && nt.length > 5) {
+              const parts = t.split(/[-–—]/);
+              if (parts.length === 2) {
+                  const start = normalizeString(parts[0]);
+                  const end = normalizeString(parts[1]);
+                  return normalizedMatchTime >= start && normalizedMatchTime <= end;
+              }
+          }
+          return false;
+      });
+  }
 
   if (!isTimeMatch) return false;
 

@@ -28,10 +28,11 @@ import {
   CreditCard,
   Building,
   X,
-  ArrowUpDown
+  ArrowUpDown,
+  Printer
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, AreaChart, Area, PieChart as RechartsPieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { getWhatsAppLink } from '../../utils/whatsapp';
@@ -61,7 +62,7 @@ export default function AdminEconomic() {
   const allTabs = [
     { id: 'dashboard', name: 'Panel', icon: LayoutDashboard, roles: ['admin'] },
     { id: 'journal', name: 'Libro Diario', icon: FileText, roles: ['admin'] },
-    { id: 'summary', name: 'Resumen / Mayor', icon: PieChart, roles: ['admin'] },
+    { id: 'summary', name: 'LIBRO MAYOR', icon: PieChart, roles: ['admin'] },
     { id: 'teams', name: 'Cuotas y Licencias', icon: Users, roles: ['admin', 'collaborator'] },
     { id: 'accounts', name: 'Plan de Cuentas', icon: Calculator, roles: ['admin'] },
     { id: 'budget', name: 'Presupuesto', icon: Target, roles: ['admin'] },
@@ -103,7 +104,7 @@ export default function AdminEconomic() {
       {/* Tab Content */}
       <div className="bg-white rounded-3xl border border-slate-200/60 shadow-sm overflow-hidden">
         {activeTab === 'dashboard' && <DashboardTab transactions={transactions} accounts={accounts} teams={teams} teamStatus={teamEconomicStatus} />}
-        {activeTab === 'journal' && <JournalTab transactions={transactions} accounts={accounts} addTransaction={addTransaction} />}
+        {activeTab === 'journal' && <JournalTab transactions={transactions} accounts={accounts} addTransaction={addTransaction} matches={matches} economicSettings={economicSettings} />}
         {activeTab === 'summary' && <SummaryTab transactions={transactions} accounts={accounts} />}
         {activeTab === 'budget' && <BudgetTab accounts={accounts} teams={teams} settings={economicSettings} matches={matches} updateSettings={updateEconomicSettings} />}
         {activeTab === 'teams' && (
@@ -137,14 +138,142 @@ export default function AdminEconomic() {
 
 // Sub-components for Tabs
 
-function JournalTab({ transactions, accounts, addTransaction }: any) {
+function JournalTab({ transactions, accounts, addTransaction, matches, economicSettings }: any) {
+  const { syncMatchAccounting } = useData();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showFixedModal, setShowFixedModal] = useState(false);
+  const [showPeriodicModal, setShowPeriodicModal] = useState(false);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  
   const [dateRange, setDateRange] = useState({
     start: format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'),
     end: format(new Date(), 'yyyy-MM-dd')
   });
   const [sortBy, setSortBy] = useState<'date' | 'account'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const uniquePeriods = Array.from(new Set(matches.map((m: any) => m.period).filter(Boolean))) as string[];
+
+  const formatPeriodRange = (periodStr: string) => {
+    if (!periodStr || !periodStr.includes('_to_')) return periodStr;
+    const [start, end] = periodStr.split('_to_');
+    try {
+      return `${format(parseISO(start), 'dd/MM/yyyy')} - ${format(parseISO(end), 'dd/MM/yyyy')}`;
+    } catch (e) {
+      return periodStr;
+    }
+  };
+
+  const handleConfirmFixed = async () => {
+    setIsProcessing(true);
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const monthName = format(parseISO(today), 'MMMM yyyy', { locale: es });
+      let count = 0;
+
+      // 1. Arrendamiento / Alquiler Sede
+      if (economicSettings.headquarters_rent && economicSettings.headquarters_rent > 0) {
+        const account = accounts.find((a: any) => a && typeof a.name === 'string' && a.name.toLowerCase().includes('arrendamiento') && a.type === 'Gasto');
+        if (account) {
+          await addTransaction({
+            date: today,
+            amount: economicSettings.headquarters_rent,
+            accountId: account.id,
+            description: `Gasto Fijo Mensual: Arrendamiento Sede Social (${monthName})`,
+            isAutomated: true,
+            type: 'Gasto'
+          });
+          count++;
+        }
+      }
+
+      // 2. Voluntario Administrativo
+      if (economicSettings.collaborator_monthly_cost && economicSettings.collaborator_monthly_cost > 0) {
+        const account = accounts.find((a: any) => a && typeof a.name === 'string' && a.name.toLowerCase().includes('voluntario administrativo') && a.type === 'Gasto');
+        if (account) {
+          await addTransaction({
+            date: today,
+            amount: economicSettings.collaborator_monthly_cost,
+            accountId: account.id,
+            description: `Gasto Fijo Mensual: Voluntario Administrativo (${monthName})`,
+            isAutomated: true,
+            type: 'Gasto'
+          });
+          count++;
+        }
+      }
+
+      // 3. Mantenimiento MyGol
+      if (economicSettings.mygol_monthly_cost && economicSettings.mygol_monthly_cost > 0) {
+        const account = accounts.find((a: any) => a && typeof a.name === 'string' && a.name.toLowerCase().includes('mygol') && a.type === 'Gasto');
+        if (account) {
+          await addTransaction({
+            date: today,
+            amount: economicSettings.mygol_monthly_cost,
+            accountId: account.id,
+            description: `Gasto Fijo Mensual: Mantenimiento MyGol (${monthName})`,
+            isAutomated: true,
+            type: 'Gasto'
+          });
+          count++;
+        }
+      }
+
+      // 4. Membresía AEMF (just in case they need it monthly or it was missing)
+      if (economicSettings.aemf_membership && economicSettings.aemf_membership > 0) {
+        const account = accounts.find((a: any) => a && typeof a.name === 'string' && a.name.toLowerCase().includes('aemf') && a.type === 'Gasto');
+        if (account) {
+          await addTransaction({
+            date: today,
+            amount: economicSettings.aemf_membership,
+            accountId: account.id,
+            description: `Gasto Fijo: Membresía AEMF (${monthName})`,
+            isAutomated: true,
+            type: 'Gasto'
+          });
+          count++;
+        }
+      }
+
+      toast.success(`Se han generado ${count} asientos de gastos fijos.`);
+      setShowFixedModal(false);
+    } catch (err) {
+      toast.error('Error al generar gastos fijos');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleConfirmPeriodic = async () => {
+    if (!selectedPeriod) {
+      toast.error('Debes seleccionar un periodo');
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      const periodMatches = matches.filter((m: any) => m.period === selectedPeriod);
+      
+      if (periodMatches.length === 0) {
+        toast.error('No hay partidos en este periodo');
+        setIsProcessing(false);
+        return;
+      }
+
+      // Sincronizar cada partido del periodo de forma masiva
+      for (const m of periodMatches) {
+        await syncMatchAccounting(m.id);
+      }
+
+      toast.success(`Sincronización completada para ${periodMatches.length} partidos.`);
+      setShowPeriodicModal(false);
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al sincronizar jornada');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const safeTransactions = transactions || [];
   const safeAccounts = accounts || [];
@@ -163,7 +292,7 @@ function JournalTab({ transactions, accounts, addTransaction }: any) {
   }).sort((a: any, b: any) => {
     const modifier = sortOrder === 'asc' ? 1 : -1;
     if (sortBy === 'date') {
-      return (new Date(a.date).getTime() - new Date(b.date).getTime()) * modifier;
+      return (parseISO(a.date).getTime() - parseISO(b.date).getTime()) * modifier;
     } else if (sortBy === 'account') {
       const aAccount = safeAccounts.find((acc: any) => acc.id === a.accountId);
       const bAccount = safeAccounts.find((acc: any) => acc.id === b.accountId);
@@ -198,9 +327,52 @@ function JournalTab({ transactions, accounts, addTransaction }: any) {
     });
   };
 
+  const generatePDF_Journal = () => {
+    const doc = new jsPDF('portrait', 'mm', 'a4');
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('LIBRO DIARIO', 14, 15);
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Periodo: ${format(parseISO(dateRange.start), 'dd/MM/yyyy')} - ${format(parseISO(dateRange.end), 'dd/MM/yyyy')}`, 14, 21);
+
+    const tableData = filteredTransactions.map((t: any) => {
+      const account = safeAccounts.find((a: any) => a.id === t.accountId);
+      const isIngreso = t.type === 'Ingreso';
+      const formattedAmount = `${isIngreso ? '+' : '-'}${t.amount.toLocaleString('de-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+      return [
+        format(parseISO(t.date), 'dd/MM/yyyy'),
+        t.description + (t.isAutomated ? ' [AUTO]' : ''),
+        account ? account.name : 'N/A',
+        isIngreso ? 'IN' : 'out',
+        formattedAmount
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 25,
+      head: [['Fecha', 'Descripción', 'Cuenta', 'Tipo', 'Importe']],
+      body: tableData,
+      theme: 'grid',
+      styles: { fontSize: 7, cellPadding: 1.5, textColor: [40, 40, 40] },
+      headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontSize: 8, fontStyle: 'bold', lineWidth: 0.1, lineColor: [200, 200, 200] },
+      columnStyles: {
+        0: { cellWidth: 20 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 40 },
+        3: { cellWidth: 10, halign: 'center' },
+        4: { cellWidth: 25, halign: 'right' },
+      },
+    });
+
+    doc.save(`libro_diario_${dateRange.start}_${dateRange.end}.pdf`);
+  };
+
   return (
     <div className="p-6">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4 print:hidden">
         <div>
           <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Asientos Contables</h3>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mt-0.5">Registro cronológico de movimientos financieros</p>
@@ -225,6 +397,30 @@ function JournalTab({ transactions, accounts, addTransaction }: any) {
           </div>
 
           <button 
+            onClick={generatePDF_Journal}
+            className="flex items-center px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200 transition-colors shadow-lg shadow-slate-100"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Generar PDF
+          </button>
+
+          <button 
+            onClick={() => setShowFixedModal(true)}
+            className="flex items-center px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200"
+          >
+            <Warehouse className="w-4 h-4 mr-2 text-indigo-400" />
+            Gastos Fijos Mes
+          </button>
+
+          <button 
+            onClick={() => setShowPeriodicModal(true)}
+            className="flex items-center px-4 py-2.5 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700 transition-colors shadow-lg shadow-amber-100"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Gastos Periódicos
+          </button>
+
+          <button 
             onClick={() => setShowAddModal(true)}
             className="flex items-center px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100"
           >
@@ -234,32 +430,38 @@ function JournalTab({ transactions, accounts, addTransaction }: any) {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50/50 border-y border-slate-100 mb-2">
+      {/* Título solo visible en impresión para el Libro Diario */}
+      <div className="hidden print:block mb-4 text-center pb-2 border-b border-black">
+        <h2 className="text-lg font-black uppercase tracking-widest text-black">Libro Diario</h2>
+        <p className="text-[10px] font-bold text-gray-600 mt-1">Periodo: {format(parseISO(dateRange.start), 'dd/MM/yyyy')} - {format(parseISO(dateRange.end), 'dd/MM/yyyy')}</p>
+      </div>
+
+      <div className="overflow-x-auto print:overflow-visible">
+        <table className="w-full text-left border-collapse print:text-[9px]">
+          <thead className="print:table-header-group">
+            <tr className="bg-slate-50/50 border-y border-slate-100 print:bg-transparent print:border-black mb-2 print:mb-0">
               <th 
-                className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors"
+                className="px-6 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors"
                 onClick={() => handleSort('date')}
               >
                 <div className="flex items-center gap-2">
                   Fecha <ArrowUpDown className="w-3 h-3" />
                 </div>
               </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Descripción</th>
+              <th className="px-6 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest">Descripción</th>
               <th 
-                className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors"
+                className="px-6 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors"
                 onClick={() => handleSort('account')}
               >
                 <div className="flex items-center gap-2">
                   Cuenta <ArrowUpDown className="w-3 h-3" />
                 </div>
               </th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipo</th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Importe</th>
+              <th className="px-6 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest hidden print:table-cell">Tipo</th>
+              <th className="px-6 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest text-right">Importe</th>
             </tr>
           </thead>
-          <tbody className="space-y-2 before:content-[''] before:block before:h-2">
+          <tbody className="space-y-2 print:space-y-0 before:content-[''] before:block before:h-2 print:before:hidden">
             {filteredTransactions.map((t: any) => {
               const account = safeAccounts.find((a: any) => a.id === t.accountId);
               const isIngreso = t.type === 'Ingreso';
@@ -267,48 +469,51 @@ function JournalTab({ transactions, accounts, addTransaction }: any) {
                 <tr 
                   key={t.id} 
                   className={`
-                    group transition-all duration-200 border-l-[3px] shadow-sm
+                    group transition-all duration-200 border-l-[3px] shadow-sm print:shadow-none print:border-l-0 print:border-b print:border-black/20
                     ${isIngreso 
-                      ? 'border-l-emerald-500 bg-white hover:bg-emerald-50/50' 
-                      : 'border-l-rose-500 bg-white hover:bg-rose-50/50'}
+                      ? 'border-l-emerald-500 bg-white hover:bg-emerald-50/50 print:bg-transparent' 
+                      : 'border-l-rose-500 bg-white hover:bg-rose-50/50 print:bg-transparent'}
                   `}
                 >
-                  <td className="px-6 py-4 border-b border-slate-50">
+                  <td className="px-6 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent">
                     <div className="flex flex-col">
-                      <span className="text-sm font-black text-slate-900">{format(new Date(t.date), 'dd/MM/yyyy')}</span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden md:inline-block">
-                        {format(new Date(t.date), 'EEEE', { locale: es })}
+                      <span className="text-sm print:text-[9px] font-black text-slate-900 print:text-black">{format(parseISO(t.date), 'dd/MM/yyyy')}</span>
+                      <span className="text-[10px] print:hidden font-bold text-slate-400 uppercase tracking-widest hidden md:inline-block">
+                        {format(parseISO(t.date), 'EEEE', { locale: es })}
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 border-b border-slate-50">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm font-bold text-slate-700">{t.description}</span>
+                  <td className="px-6 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent max-w-[200px] print:max-w-[150px]">
+                    <div className="flex flex-col gap-1 print:gap-0">
+                      <span className="text-sm print:text-[9px] font-bold text-slate-700 print:text-black break-words leading-tight">{t.description}</span>
                       {t.isAutomated && (
-                        <span className="inline-flex items-center self-start px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-widest border border-indigo-100">
+                        <span className="inline-flex items-center self-start px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 text-[9px] print:text-[7px] font-black uppercase tracking-widest border border-indigo-100 print:border-black/10 print:bg-transparent print:text-black print:px-0">
                           <Settings className="w-2.5 h-2.5 mr-1" />
                           Automático
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4 border-b border-slate-50">
+                  <td className="px-6 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent">
                     {account ? (
                       <div className="flex flex-col">
-                        <span className="text-xs font-black text-slate-900">{account.code}</span>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter truncate max-w-[150px]">{account.name}</span>
+                        <span className="text-xs print:text-[8px] font-black text-slate-900 print:text-black">{account.code}</span>
+                        <span className="text-[10px] print:text-[7px] font-bold text-slate-500 print:text-black/80 uppercase tracking-tighter truncate max-w-[150px] print:max-w-[100px]">{account.name}</span>
                       </div>
                     ) : (
-                      <span className="text-xs font-bold text-slate-400 italic">N/A</span>
+                      <span className="text-xs print:text-[8px] font-bold text-slate-400 print:text-black italic">N/A</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 border-b border-slate-50">
+                  <td className="px-6 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent hidden print:table-cell">
+                    <span className="text-[9px] font-bold uppercase">{isIngreso ? 'IN' : 'out'}</span>
+                  </td>
+                  <td className="px-6 py-4 print:hidden border-b border-slate-50 print:border-transparent">
                     <div className={`inline-flex items-center justify-center p-2 rounded-xl border ${isIngreso ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'}`}>
                       {isIngreso ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
                     </div>
                   </td>
-                  <td className={`px-6 py-4 border-b border-slate-50 text-right`}>
-                    <span className={`text-base font-black tabular-nums tracking-tight ${isIngreso ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  <td className={`px-6 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent text-right`}>
+                    <span className={`text-base print:text-[10px] font-black tabular-nums tracking-tight ${isIngreso ? 'text-emerald-600 print:text-black' : 'text-rose-600 print:text-black'}`}>
                       {isIngreso ? '+' : '-'}{t.amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                     </span>
                   </td>
@@ -413,6 +618,105 @@ function JournalTab({ transactions, accounts, addTransaction }: any) {
           </div>
         </div>
       )}
+
+      {showFixedModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300">
+            <div className="p-8">
+              <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6">
+                <Warehouse className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">Generar Gastos Fijos</h3>
+              <p className="text-sm font-bold text-slate-500 leading-relaxed mb-6">
+                Se generarán los asientos contables mensuales para los siguientes conceptos configurados:
+              </p>
+              
+              <ul className="space-y-3 mb-8">
+                <li className="flex items-center text-xs font-bold text-slate-700">
+                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2" />
+                  Arrendamiento Sede Social: {economicSettings.headquarters_rent || 0} €
+                </li>
+                <li className="flex items-center text-xs font-bold text-slate-700">
+                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2" />
+                  Membresía AEMF: {economicSettings.aemf_membership || 0} €
+                </li>
+                <li className="flex items-center text-xs font-bold text-slate-700">
+                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2" />
+                  Voluntario Administrativo: {economicSettings.collaborator_monthly_cost || 0} €
+                </li>
+                <li className="flex items-center text-xs font-bold text-slate-700">
+                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2" />
+                  Mantenimiento MyGol: {economicSettings.mygol_monthly_cost || 0} €
+                </li>
+              </ul>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowFixedModal(false)}
+                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  disabled={isProcessing}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleConfirmFixed}
+                  disabled={isProcessing}
+                  className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                >
+                  {isProcessing ? 'Procesando...' : 'Confirmar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPeriodicModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300">
+            <div className="p-8">
+              <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-6">
+                <RefreshCw className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">Conciliación de Jornada</h3>
+              <p className="text-sm font-bold text-slate-500 leading-relaxed mb-6">
+                Selecciona un periodo para resincronizar todos los asientos contables automáticos (Árbitros, Campos e Ingresos) y asegurar que coinciden con los datos actuales.
+              </p>
+              
+              <div className="mb-8">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Seleccionar Periodo</label>
+                <select 
+                  value={selectedPeriod}
+                  onChange={(e) => setSelectedPeriod(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-amber-500/20 outline-none"
+                >
+                  <option value="">Elegir periodo...</option>
+                  {uniquePeriods.map(p => (
+                    <option key={p} value={p}>{formatPeriodRange(p)}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowPeriodicModal(false)}
+                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  disabled={isProcessing}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleConfirmPeriodic}
+                  disabled={!selectedPeriod || isProcessing}
+                  className="flex-1 py-4 bg-amber-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-amber-700 transition-all shadow-lg shadow-amber-100"
+                >
+                  {isProcessing ? 'Sincronizando...' : 'Sincronizar Jornada'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -441,118 +745,146 @@ function SummaryTab({ transactions, accounts }: any) {
     .filter((t: any) => t.accountId === selectedAccountId)
     .sort((a: any, b: any) => b.date.localeCompare(a.date));
 
-  const handlePostFixedExpenses = () => {
-    toast('¿Generar asientos fijos?', {
-      description: 'Se generarán los asientos de Arrendamiento y Membresía AEMF para este mes.',
-      action: {
-        label: 'Generar',
-        onClick: async () => {
-          const monthName = format(new Date(), 'MMMM yyyy', { locale: es });
-          const today = format(new Date(), 'yyyy-MM-dd');
-
-          // 1. Arrendamiento
-          if (economicSettings.headquarters_rent && economicSettings.headquarters_rent > 0) {
-            const account = safeAccounts.find((a: any) => a && typeof a.name === 'string' && a.name.toLowerCase().includes('arrendamientos sede') && a.type === 'Gasto');
-            if (account) {
-              await addTransaction({
-                date: today,
-                amount: economicSettings.headquarters_rent,
-                accountId: account.id,
-                description: `Gasto Fijo: Arrendamiento Sede Social (${monthName})`,
-                isAutomated: true,
-                type: 'Gasto'
-              });
-            }
-          }
-
-          // 2. Membresía AEMF
-          if (economicSettings.aemf_membership && economicSettings.aemf_membership > 0) {
-             const account = safeAccounts.find((a: any) => a && typeof a.name === 'string' && a.name.toLowerCase().includes('aemf') && a.type === 'Gasto');
-             if (account) {
-               await addTransaction({
-                 date: today,
-                 amount: economicSettings.aemf_membership,
-                 accountId: account.id,
-                 description: `Gasto Fijo: Membresía AEMF (${monthName})`,
-                 isAutomated: true,
-                 type: 'Gasto'
-               });
-             }
-          }
-          
-          // 3. Colaborador Administrativo
-          if (economicSettings.collaborator_monthly_cost && economicSettings.collaborator_monthly_cost > 0) {
-             const account = safeAccounts.find((a: any) => a && typeof a.name === 'string' && a.name.toLowerCase().includes('voluntario administrativo') && a.type === 'Gasto');
-             if (account) {
-               await addTransaction({
-                 date: today,
-                 amount: economicSettings.collaborator_monthly_cost,
-                 accountId: account.id,
-                 description: `Gasto Fijo: Colaborador Administrativo (${monthName})`,
-                 isAutomated: true,
-                 type: 'Gasto'
-               });
-             }
-          }
-          
-          // 4. Mantenimiento MyGol
-          if (economicSettings.mygol_monthly_cost && economicSettings.mygol_monthly_cost > 0) {
-             const account = safeAccounts.find((a: any) => a && typeof a.name === 'string' && a.name.toLowerCase().includes('mygol') && a.type === 'Gasto');
-             if (account) {
-               await addTransaction({
-                 date: today,
-                 amount: economicSettings.mygol_monthly_cost,
-                 accountId: account.id,
-                 description: `Gasto Fijo: Mantenimiento anual MyGol (${monthName})`,
-                 isAutomated: true,
-                 type: 'Gasto'
-               });
-             }
-          }
-          toast.success('Asientos de gastos fijos generados correctamente.');
-        }
-      },
-      cancel: {
-        label: 'Cancelar',
-        onClick: () => {}
-      }
-    });
-  };
-
   // Budget vs Actual calculation
   const totalBudgetedIncome = 25000; // Placeholder for theoretical season income
   const progressPercent = Math.min(100, (totalIncome / totalBudgetedIncome) * 100);
 
-  return (
-    <div className="p-6 space-y-8">
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-bold">
-            <span className="text-[9px] text-slate-400 uppercase">Filtrar Periodo</span>
-            <input 
-              type="date" 
-              value={dateRange.start}
-              onChange={(e) => setDateRange(p => ({ ...p, start: e.target.value }))}
-              className="bg-transparent text-[11px] outline-none text-slate-700"
-            />
-            <span className="text-slate-300">/</span>
-            <input 
-              type="date" 
-              value={dateRange.end}
-              onChange={(e) => setDateRange(p => ({ ...p, end: e.target.value }))}
-              className="bg-transparent text-[11px] outline-none text-slate-700"
-            />
-        </div>
+  const generatePDF_Resumen = () => {
+    const doc = new jsPDF('portrait', 'mm', 'a4');
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RESUMEN DE CUENTAS / MAYORES AUXILIARES', 14, 15);
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Periodo: ${format(parseISO(dateRange.start), 'dd/MM/yyyy')} - ${format(parseISO(dateRange.end), 'dd/MM/yyyy')}`, 14, 21);
 
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RESUMEN PERIODO', 14, 30);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Ingresos Periodo: ${totalIncome.toLocaleString('de-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`, 14, 36);
+    doc.text(`Gastos Periodo: ${totalExpense.toLocaleString('de-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`, 14, 42);
+    doc.text(`Balance Periodo: ${balance.toLocaleString('de-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`, 14, 48);
+
+    const incomeAccounts = safeAccounts.filter((a: any) => a.type === 'Ingreso').map((acc: any) => {
+      const amount = filteredTransactions.filter((t: any) => t.accountId === acc.id).reduce((sum: number, t: any) => sum + t.amount, 0);
+      return amount > 0 ? [acc.name, `${amount.toLocaleString('de-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`] : null;
+    }).filter(Boolean);
+
+    autoTable(doc, {
+      startY: 55,
+      head: [['Cuenta de Ingresos', 'Total']],
+      body: incomeAccounts as any,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 1.5, textColor: [40, 40, 40] },
+      headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontSize: 8, fontStyle: 'bold', lineWidth: 0.1, lineColor: [200, 200, 200] },
+      columnStyles: { 0: { cellWidth: 'auto' }, 1: { cellWidth: 40, halign: 'right' } }
+    });
+
+    const expenseAccounts = safeAccounts.filter((a: any) => a.type === 'Gasto').map((acc: any) => {
+      const amount = filteredTransactions.filter((t: any) => t.accountId === acc.id).reduce((sum: number, t: any) => sum + t.amount, 0);
+      return amount > 0 ? [acc.name, `${amount.toLocaleString('de-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`] : null;
+    }).filter(Boolean);
+
+    // @ts-ignore
+    const finalY = doc.lastAutoTable.finalY || 55;
+
+    autoTable(doc, {
+      startY: finalY + 10,
+      head: [['Cuenta de Gastos', 'Total']],
+      body: expenseAccounts as any,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 1.5, textColor: [40, 40, 40] },
+      headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontSize: 8, fontStyle: 'bold', lineWidth: 0.1, lineColor: [200, 200, 200] },
+      columnStyles: { 0: { cellWidth: 'auto' }, 1: { cellWidth: 40, halign: 'right' } }
+    });
+
+    doc.save(`resumen_cuentas_${dateRange.start}_${dateRange.end}.pdf`);
+  };
+
+  const generatePDF_Mayor = () => {
+    if (!selectedAccount) return;
+    const doc = new jsPDF('portrait', 'mm', 'a4');
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`LIBRO MAYOR: ${selectedAccount.name.toUpperCase()}`, 14, 15);
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Periodo: ${format(parseISO(dateRange.start), 'dd/MM/yyyy')} - ${format(parseISO(dateRange.end), 'dd/MM/yyyy')}`, 14, 21);
+
+    const tableData = accountTransactions.map((t: any) => {
+      const formattedAmount = `${t.type === 'Ingreso' ? '+' : '-'}${t.amount.toLocaleString('de-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+      return [
+        format(parseISO(t.date), 'dd/MM/yyyy'),
+        t.description + (t.isAutomated ? ' [AUTO]' : ''),
+        formattedAmount
+      ];
+    });
+
+    const totalAccumulated = accountTransactions.reduce((acc: number, t: any) => acc + t.amount, 0);
+    const formattedTotal = `${totalAccumulated.toLocaleString('de-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+
+    tableData.push(['', 'TOTAL ACUMULADO', formattedTotal]);
+
+    autoTable(doc, {
+      startY: 25,
+      head: [['Fecha', 'Descripción', 'Importe']],
+      body: tableData,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 1.5, textColor: [40, 40, 40] },
+      headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontSize: 8, fontStyle: 'bold', lineWidth: 0.1, lineColor: [200, 200, 200] },
+      columnStyles: {
+        0: { cellWidth: 20 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 30, halign: 'right' },
+      },
+      didParseCell: (data) => {
+        if (data.row.index === tableData.length - 1) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.textColor = [0, 0, 0];
+          data.cell.styles.fillColor = [250, 250, 250];
+        }
+      }
+    });
+
+    doc.save(`libro_mayor_${selectedAccount.name.replace(/\s+/g, '_').toLowerCase()}_${dateRange.start}_${dateRange.end}.pdf`);
+  };
+
+  return (
+    <div className="p-6 space-y-8 print:p-0 print:space-y-4">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 print:hidden">
+        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-bold">
+          <span className="text-[9px] text-slate-400 uppercase">Filtrar Periodo</span>
+          <input 
+            type="date" 
+            value={dateRange.start}
+            onChange={(e) => setDateRange(p => ({ ...p, start: e.target.value }))}
+            className="bg-transparent text-[11px] outline-none text-slate-700"
+          />
+          <span className="text-slate-300">/</span>
+          <input 
+            type="date" 
+            value={dateRange.end}
+            onChange={(e) => setDateRange(p => ({ ...p, end: e.target.value }))}
+            className="bg-transparent text-[11px] outline-none text-slate-700"
+          />
+        </div>
+        
         <button 
-          onClick={handlePostFixedExpenses}
-          className="flex items-center px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors"
+          onClick={generatePDF_Resumen}
+          className="flex items-center px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200 transition-colors shadow-lg shadow-slate-100"
         >
-          <Save className="w-4 h-4 mr-2 text-indigo-400" />
-          Generar Gastos Fijos Mes
+          <Download className="w-4 h-4 mr-2" />
+          Generar PDF (Resumen)
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 md:grid-cols-3 gap-6 ${selectedAccountId ? 'print:hidden' : ''}`}>
         <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-6 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Ingresos Periodo</p>
@@ -583,7 +915,7 @@ function SummaryTab({ transactions, accounts }: any) {
       </div>
 
       {/* Budget vs Actual */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+      <div className={`bg-white p-6 rounded-3xl border border-slate-100 shadow-sm ${selectedAccountId ? 'print:hidden' : ''}`}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Ejecución Presupuestaria (Ingresos)</h4>
@@ -597,7 +929,7 @@ function SummaryTab({ transactions, accounts }: any) {
       </div>
       
       {/* Chart Placeholders or Breakdowns would go here */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className={`grid grid-cols-1 md:grid-cols-2 gap-8 ${selectedAccountId ? 'print:hidden' : ''}`}>
           <div className="space-y-4">
               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Mayores Auxiliares (Ingresos)</h4>
               <div className="bg-slate-50/50 rounded-2xl p-2 space-y-1">
@@ -670,62 +1002,72 @@ function SummaryTab({ transactions, accounts }: any) {
 
       {/* Detalle de Cuenta Seleccionada (Libro Mayor) */}
       {selectedAccountId && selectedAccount && (
-        <div className="bg-slate-50 rounded-3xl border border-slate-200 p-6 animate-in fade-in slide-in-from-bottom duration-500">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">
+        <div className="bg-slate-50 rounded-3xl border border-slate-200 p-6 print:p-0 print:bg-transparent print:border-none animate-in fade-in slide-in-from-bottom duration-500">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4 print:mb-2">
+            <div className="print:border-b print:border-black print:pb-2 print:w-full">
+              <h4 className="text-sm font-black text-slate-900 print:text-black print:text-lg uppercase tracking-widest">
                 Libro Mayor: {selectedAccount.name}
               </h4>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mt-0.5">
-                Movimientos detallados para el periodo seleccionado
+              <p className="text-[10px] font-bold text-slate-400 print:text-gray-600 print:mt-1 uppercase tracking-tight mt-0.5">
+                Movimientos entre: {format(parseISO(dateRange.start), 'dd/MM/yyyy')} - {format(parseISO(dateRange.end), 'dd/MM/yyyy')}
               </p>
             </div>
-            <button 
-              onClick={() => setSelectedAccountId(null)}
-              className="text-[10px] font-black text-slate-400 hover:text-rose-500 uppercase tracking-widest transition-colors"
-            >
-              Cerrar Detalle
-            </button>
+            
+            <div className="flex items-center gap-3 print:hidden">
+              <button 
+                onClick={generatePDF_Mayor}
+                className="flex items-center px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors shadow-lg"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Generar PDF (Mayor)
+              </button>
+              <button 
+                onClick={() => setSelectedAccountId(null)}
+                className="text-[10px] font-black text-slate-400 hover:text-rose-500 uppercase tracking-widest transition-colors"
+              >
+                Cerrar Detalle
+              </button>
+            </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
-            <table className="w-full text-left">
+          <div className="bg-white rounded-2xl border border-slate-100 print:border-none print:shadow-none overflow-hidden shadow-sm">
+            <table className="w-full text-left print:text-[10px]">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Fecha</th>
-                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Descripción</th>
-                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Importe</th>
+                <tr className="bg-slate-50 border-b border-slate-100 print:bg-transparent print:border-black">
+                  <th className="px-4 py-3 print:px-2 print:py-1.5 text-[9px] font-black text-slate-400 print:text-black uppercase tracking-widest">Fecha</th>
+                  <th className="px-4 py-3 print:px-2 print:py-1.5 text-[9px] font-black text-slate-400 print:text-black uppercase tracking-widest">Descripción</th>
+                  <th className="px-4 py-3 print:px-2 print:py-1.5 text-[9px] font-black text-slate-400 print:text-black uppercase tracking-widest text-right">Importe</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-slate-50 print:divide-slate-200">
                 {accountTransactions.map((t: any) => (
                   <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-4 py-3 text-xs font-bold text-slate-500 tabular-nums">
-                      {format(new Date(t.date), 'dd/MM/yy')}
+                    <td className="px-4 py-3 print:px-2 print:py-1.5 text-xs print:text-[10px] font-bold text-slate-500 print:text-black tabular-nums">
+                      {format(parseISO(t.date), 'dd/MM/yyyy')}
                     </td>
-                    <td className="px-4 py-3 text-xs font-medium text-slate-700">
+                    <td className="px-4 py-3 print:px-2 print:py-1.5 text-xs print:text-[10px] font-medium text-slate-700 print:text-black">
                       {t.description}
                       {t.isAutomated && (
                         <span className="ml-2 px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded text-[8px] font-black uppercase">AUTO</span>
                       )}
                     </td>
-                    <td className={`px-4 py-3 text-xs font-black text-right tabular-nums ${t.type === 'Ingreso' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    <td className={`px-4 py-3 print:px-2 print:py-1.5 text-xs font-black text-right tabular-nums print:text-[10px] print:text-black ${t.type === 'Ingreso' ? 'text-emerald-600' : 'text-rose-600'}`}>
                       {t.type === 'Ingreso' ? '+' : '-'}{t.amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                     </td>
                   </tr>
                 ))}
                 {accountTransactions.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="px-4 py-8 text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+                    <td colSpan={3} className="px-4 py-8 text-center text-slate-400 print:text-black text-[10px] font-bold uppercase tracking-widest">
                       No hay movimientos en este periodo
                     </td>
                   </tr>
                 )}
               </tbody>
-              <tfoot>
-                <tr className="bg-slate-50 border-t border-slate-100">
-                  <td colSpan={2} className="px-4 py-3 text-[10px] font-black text-slate-900 uppercase text-right">Total Acumulado:</td>
-                  <td className={`px-4 py-3 text-xs font-black text-right tabular-nums ${selectedAccount.type === 'Ingreso' ? 'text-emerald-600' : 'text-rose-600'}`}>
+              <tfoot className="print:bg-transparent">
+                <tr className="bg-slate-50 border-t border-slate-100 print:bg-transparent print:border-black">
+                  <td colSpan={2} className="px-4 py-3 print:px-2 print:py-1.5 text-[10px] font-black text-slate-900 print:text-black uppercase text-right">Total Acumulado:</td>
+                  <td className={`px-4 py-3 print:px-2 print:py-1.5 text-xs font-black text-right print:text-[10px] tabular-nums print:text-black ${selectedAccount.type === 'Ingreso' ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {accountTransactions.reduce((acc: number, t: any) => acc + t.amount, 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                   </td>
                 </tr>
@@ -1629,8 +1971,11 @@ function AccountsTab({ accounts, addAccount, updateAccount, deleteAccount }: any
 }
 
 function ConfigEconomicTab({ settings, updateSettings }: any) {
-  const { matches } = useData();
+  const { matches, clearAllEconomicData } = useData();
   const [showVenueModal, setShowVenueModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetConfirm, setResetConfirm] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
   const [formData, setFormData] = useState({ 
     registration_fee: typeof settings.registration_fee === 'number' && !isNaN(settings.registration_fee) ? settings.registration_fee : 0,
     license_cost_type1: typeof settings.license_cost_type1 === 'number' && !isNaN(settings.license_cost_type1) ? settings.license_cost_type1 : 0,
@@ -1922,6 +2267,35 @@ function ConfigEconomicTab({ settings, updateSettings }: any) {
           </div>
         </div>
 
+        <div className="pt-8 border-t border-slate-100">
+          <div className="bg-rose-50 border border-rose-100 rounded-3xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-rose-600 p-1.5 rounded-lg">
+                <AlertTriangle className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-rose-600 uppercase tracking-widest">Zona de Peligro</h4>
+                <p className="text-[10px] font-bold text-rose-400 uppercase tracking-tight">Acciones irreversibles sobre la gestión económica</p>
+              </div>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-white/50 rounded-2xl border border-rose-100/50">
+              <div className="space-y-1">
+                <p className="text-xs font-black text-slate-900 uppercase tracking-tight">Reiniciar Gestión Económica</p>
+                <p className="text-[10px] font-medium text-slate-500 leading-relaxed max-w-md italic">
+                  Esta acción eliminará permanentemente todos los ingresos, gastos, entregas de efectivo de árbitros y estados de pago de equipos de la base de datos. Los equipos y árbitros NO se borrarán.
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowResetModal(true)}
+                className="px-6 py-2.5 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-100 whitespace-nowrap"
+              >
+                Limpiar Datos Económicos
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div className="pt-6 border-t border-slate-100 flex justify-end">
            <button 
             onClick={handleSave}
@@ -1994,6 +2368,72 @@ function ConfigEconomicTab({ settings, updateSettings }: any) {
               >
                 Guardar y Cerrar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showResetModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300">
+            <div className="p-8 text-center">
+              <div className="w-20 h-20 bg-rose-100 text-rose-600 rounded-3xl flex items-center justify-center mx-auto mb-6 animate-pulse">
+                <AlertCircle className="w-10 h-10" />
+              </div>
+              
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">¡ADVERTENCIA CRÍTICA!</h3>
+              <p className="text-sm font-bold text-slate-500 leading-relaxed mb-6">
+                Estás a punto de borrar <span className="text-rose-600">TODOS</span> los datos financieros de esta temporada. Esta acción es irreversible y no se puede deshacer.
+              </p>
+              
+              <div className="bg-slate-50 rounded-2xl p-4 mb-6 border border-slate-100">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Para confirmar, escribe "BORRAR" abajo</p>
+                <input 
+                  type="text" 
+                  value={resetConfirm}
+                  onChange={(e) => setResetConfirm(e.target.value)}
+                  placeholder="Escribe BORRAR..."
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-center text-sm font-black text-rose-600 outline-none focus:ring-2 focus:ring-rose-500/20"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => {
+                    setShowResetModal(false);
+                    setResetConfirm('');
+                  }}
+                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  disabled={isResetting}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={async () => {
+                    if (resetConfirm === 'BORRAR') {
+                      setIsResetting(true);
+                      try {
+                        await clearAllEconomicData();
+                        toast.success('Gestión económica reiniciada con éxito');
+                        setShowResetModal(false);
+                        setResetConfirm('');
+                      } catch (err) {
+                        toast.error('Error al reiniciar los datos');
+                        console.error(err);
+                      } finally {
+                        setIsResetting(false);
+                      }
+                    }
+                  }}
+                  disabled={resetConfirm !== 'BORRAR' || isResetting}
+                  className={`flex-1 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg ${
+                    resetConfirm === 'BORRAR' && !isResetting
+                      ? 'bg-rose-600 text-white shadow-rose-100 hover:bg-rose-700' 
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                  }`}
+                >
+                  {isResetting ? 'Borrando...' : 'Borrar Todo'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2479,7 +2919,7 @@ function DashboardTab({ transactions, accounts, teams, teamStatus }: any) {
   // Monthly data array for chart
   const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   const monthlyData = months.map((month, index) => {
-    const monthTransactions = safeTransactions.filter((t: any) => t?.date && new Date(t.date).getMonth() === index);
+      const monthTransactions = safeTransactions.filter((t: any) => t?.date && parseISO(t?.date).getMonth() === index);
     const inc = monthTransactions.filter((t: any) => t?.type === 'Ingreso').reduce((sum: number, t: any) => sum + (t?.amount || 0), 0);
     const exp = monthTransactions.filter((t: any) => t?.type === 'Gasto').reduce((sum: number, t: any) => sum + (t?.amount || 0), 0);
     return { name: month, Ingresos: inc, Gastos: exp };

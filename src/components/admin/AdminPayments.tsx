@@ -154,15 +154,16 @@ export default function AdminPayments() {
       .filter(item => !item.pagado);
   }, [matches, payments, teams, referees]);
 
-  const handleLiquidate = (item: any) => {
+  const handleLiquidate = async (item: any) => {
     console.log('Liquidating:', item);
-    addPayment({
+    await addPayment({
       match_id: item.match_id,
       team_id: item.teamId,
       amount: 35,
       is_paid: true,
       reason: 'Transferencia'
     });
+    toast.success('Pago confirmado y contabilizado');
   };
 
   const getTabColor = (tab: string) => {
@@ -659,7 +660,7 @@ export default function AdminPayments() {
                                 <CheckCircle2 className="w-3.5 h-3.5" /> 
                                 <span className="text-[10px] font-black uppercase tracking-tighter">Entregado</span>
                               </div>
-                              <span className="text-[8px] font-bold">{format(new Date(delivery.created_at), 'dd/MM/yy')}</span>
+                              <span className="text-[8px] font-bold">{format(new Date(delivery.created_at), 'dd/MM/yyyy')}</span>
                             </div>
                         ) : (
                           <button 
@@ -683,7 +684,7 @@ export default function AdminPayments() {
                             <div key={date} className="bg-white p-4 rounded-[1.5rem] border border-slate-100 shadow-sm">
                               <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest mb-3 flex items-center gap-2">
                                 <Calendar className="w-3.5 h-3.5 text-indigo-500" />
-                                {format(new Date(date as string), 'dd/MM/yy EEEE', { locale: es })}
+                                {format(new Date(date as string), 'dd/MM/yyyy EEEE', { locale: es })}
                               </p>
                               <div className="space-y-2">
                                   {dateMatches.map(m => {

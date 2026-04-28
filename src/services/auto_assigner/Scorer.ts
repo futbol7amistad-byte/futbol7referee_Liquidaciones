@@ -1,6 +1,7 @@
 // Scorer.ts
 import { Match, Referee } from "../../types";
 import { AssignmentSession } from "./types";
+import { normalizeString } from "./Constraints";
 
 export const calculateScore = (ref: Referee, match: Match, session: AssignmentSession): number => {
   if (!ref.preferences) return 0;
@@ -25,5 +26,14 @@ export const calculateScore = (ref: Referee, match: Match, session: AssignmentSe
   // Cada repetición penaliza fuertemente (-15)
   score -= (recentMatchesWithTeams.length * 15);
   
+  // 3. Distribución global en histórico
+  const totalInHistory = session.history.filter(h => h.referee_id === ref.id).length;
+  score -= (totalInHistory * 2);
+
+  // 4. Rotación de Campos
+  const normField = normalizeString(match.field);
+  const recentInField = session.history.filter(h => h.referee_id === ref.id && normalizeString(h.field) === normField).length;
+  score -= (recentInField * 5);
+
   return score;
 };
