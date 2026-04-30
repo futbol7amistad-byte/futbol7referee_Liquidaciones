@@ -81,7 +81,7 @@ function AppRoutes() {
               <Route path="/teams" element={<AdminTeams />} />
               <Route path="/payments" element={<AdminPayments />} />
               <Route path="/economic" element={<AdminEconomic />} />
-              <Route path="/settlements" element={<AdminSettlements />} />
+              <Route path="/settlements" element={<RoleGuard allowedRoles={['admin']}><AdminSettlements /></RoleGuard>} />
               <Route path="/seasons" element={<RoleGuard allowedRoles={['admin']}><AdminSeasons /></RoleGuard>} />
               <Route path="/utilities" element={<RoleGuard allowedRoles={['admin']}><AdminUtilities /></RoleGuard>} />
               <Route path="/migration-tool" element={<RoleGuard allowedRoles={['admin']}><MigrationTool /></RoleGuard>} />

@@ -52,6 +52,7 @@ export default function AdminEconomic() {
     updateAccountingAccount,
     deleteAccountingAccount,
     addTransaction,
+    deleteTransaction,
     updateEconomicSettings,
     updateTeamEconomicStatus
   } = useData();
@@ -104,7 +105,7 @@ export default function AdminEconomic() {
       {/* Tab Content */}
       <div className="bg-white rounded-3xl border border-slate-200/60 shadow-sm overflow-hidden">
         {activeTab === 'dashboard' && <DashboardTab transactions={transactions} accounts={accounts} teams={teams} teamStatus={teamEconomicStatus} />}
-        {activeTab === 'journal' && <JournalTab transactions={transactions} accounts={accounts} addTransaction={addTransaction} matches={matches} economicSettings={economicSettings} />}
+        {activeTab === 'journal' && <JournalTab transactions={transactions} accounts={accounts} addTransaction={addTransaction} deleteTransaction={deleteTransaction} matches={matches} economicSettings={economicSettings} />}
         {activeTab === 'summary' && <SummaryTab transactions={transactions} accounts={accounts} />}
         {activeTab === 'budget' && <BudgetTab accounts={accounts} teams={teams} settings={economicSettings} matches={matches} updateSettings={updateEconomicSettings} />}
         {activeTab === 'teams' && (
@@ -138,11 +139,14 @@ export default function AdminEconomic() {
 
 // Sub-components for Tabs
 
-function JournalTab({ transactions, accounts, addTransaction, matches, economicSettings }: any) {
+function JournalTab({ transactions, accounts, addTransaction, deleteTransaction, matches, economicSettings }: any) {
   const { syncMatchAccounting } = useData();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showFixedModal, setShowFixedModal] = useState(false);
   const [showPeriodicModal, setShowPeriodicModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
+  const [showBlockDeleteModal, setShowBlockDeleteModal] = useState(false);
+  const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   
@@ -213,22 +217,6 @@ function JournalTab({ transactions, accounts, addTransaction, matches, economicS
             amount: economicSettings.mygol_monthly_cost,
             accountId: account.id,
             description: `Gasto Fijo Mensual: Mantenimiento MyGol (${monthName})`,
-            isAutomated: true,
-            type: 'Gasto'
-          });
-          count++;
-        }
-      }
-
-      // 4. Membresía AEMF (just in case they need it monthly or it was missing)
-      if (economicSettings.aemf_membership && economicSettings.aemf_membership > 0) {
-        const account = accounts.find((a: any) => a && typeof a.name === 'string' && a.name.toLowerCase().includes('aemf') && a.type === 'Gasto');
-        if (account) {
-          await addTransaction({
-            date: today,
-            amount: economicSettings.aemf_membership,
-            accountId: account.id,
-            description: `Gasto Fijo: Membresía AEMF (${monthName})`,
             isAutomated: true,
             type: 'Gasto'
           });
@@ -417,8 +405,18 @@ function JournalTab({ transactions, accounts, addTransaction, matches, economicS
             className="flex items-center px-4 py-2.5 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700 transition-colors shadow-lg shadow-amber-100"
           >
             <RefreshCw className="w-4 h-4 mr-2" />
-            Gastos Periódicos
+            Sincronizar Ingresos Partidos
           </button>
+
+          {selectedTransactions.length > 0 && (
+            <button 
+              onClick={() => setShowBlockDeleteModal(true)}
+              className="flex items-center px-4 py-2.5 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700 transition-colors shadow-lg shadow-rose-100 animate-in fade-in zoom-in duration-200"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Eliminar Seleccionados ({selectedTransactions.length})
+            </button>
+          )}
 
           <button 
             onClick={() => setShowAddModal(true)}
@@ -440,6 +438,25 @@ function JournalTab({ transactions, accounts, addTransaction, matches, economicS
         <table className="w-full text-left border-collapse print:text-[9px]">
           <thead className="print:table-header-group">
             <tr className="bg-slate-50/50 border-y border-slate-100 print:bg-transparent print:border-black mb-2 print:mb-0">
+              <th className="px-4 py-4 print:hidden w-12 cursor-pointer" onClick={(e) => {
+                const allIds = filteredTransactions.map((t: any) => t.id);
+                const allSelected = allIds.length > 0 && allIds.every((id: string) => selectedTransactions.includes(id));
+                if (allSelected) {
+                  setSelectedTransactions(selectedTransactions.filter(id => !allIds.includes(id)));
+                } else {
+                  setSelectedTransactions(Array.from(new Set([...selectedTransactions, ...allIds])));
+                }
+              }}>
+                <div className="flex items-center justify-center">
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                    filteredTransactions.length > 0 && filteredTransactions.every((t: any) => selectedTransactions.includes(t.id))
+                      ? 'bg-indigo-600 border-indigo-600'
+                      : 'border-slate-300 bg-white'
+                  }`}>
+                    {filteredTransactions.length > 0 && filteredTransactions.every((t: any) => selectedTransactions.includes(t.id)) && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                </div>
+              </th>
               <th 
                 className="px-6 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors"
                 onClick={() => handleSort('date')}
@@ -459,6 +476,7 @@ function JournalTab({ transactions, accounts, addTransaction, matches, economicS
               </th>
               <th className="px-6 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest hidden print:table-cell">Tipo</th>
               <th className="px-6 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest text-right">Importe</th>
+              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right print:hidden">Acciones</th>
             </tr>
           </thead>
           <tbody className="space-y-2 print:space-y-0 before:content-[''] before:block before:h-2 print:before:hidden">
@@ -473,8 +491,30 @@ function JournalTab({ transactions, accounts, addTransaction, matches, economicS
                     ${isIngreso 
                       ? 'border-l-emerald-500 bg-white hover:bg-emerald-50/50 print:bg-transparent' 
                       : 'border-l-rose-500 bg-white hover:bg-rose-50/50 print:bg-transparent'}
+                    ${selectedTransactions.includes(t.id) ? '!bg-indigo-50/50 !border-l-indigo-500' : ''}
                   `}
                 >
+                  <td className="px-4 py-4 print:hidden border-b border-slate-50 print:border-transparent">
+                    <div 
+                      className="flex items-center justify-center cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (selectedTransactions.includes(t.id)) {
+                          setSelectedTransactions(prev => prev.filter(id => id !== t.id));
+                        } else {
+                          setSelectedTransactions(prev => [...prev, t.id]);
+                        }
+                      }}
+                    >
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                        selectedTransactions.includes(t.id)
+                          ? 'bg-indigo-600 border-indigo-600'
+                          : 'border-slate-300 bg-white'
+                      }`}>
+                        {selectedTransactions.includes(t.id) && <Check className="w-3 h-3 text-white" />}
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-6 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent">
                     <div className="flex flex-col">
                       <span className="text-sm print:text-[9px] font-black text-slate-900 print:text-black">{format(parseISO(t.date), 'dd/MM/yyyy')}</span>
@@ -485,7 +525,10 @@ function JournalTab({ transactions, accounts, addTransaction, matches, economicS
                   </td>
                   <td className="px-6 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent max-w-[200px] print:max-w-[150px]">
                     <div className="flex flex-col gap-1 print:gap-0">
-                      <span className="text-sm print:text-[9px] font-bold text-slate-700 print:text-black break-words leading-tight">{t.description}</span>
+                      <div className="flex items-start gap-2">
+                        {isIngreso ? <TrendingUp className="w-4 h-4 mt-0.5 text-emerald-500 flex-shrink-0 print:hidden" /> : <TrendingDown className="w-4 h-4 mt-0.5 text-rose-500 flex-shrink-0 print:hidden" />}
+                        <span className="text-sm print:text-[9px] font-bold text-slate-700 print:text-black break-words leading-tight">{t.description}</span>
+                      </div>
                       {t.isAutomated && (
                         <span className="inline-flex items-center self-start px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 text-[9px] print:text-[7px] font-black uppercase tracking-widest border border-indigo-100 print:border-black/10 print:bg-transparent print:text-black print:px-0">
                           <Settings className="w-2.5 h-2.5 mr-1" />
@@ -517,12 +560,21 @@ function JournalTab({ transactions, accounts, addTransaction, matches, economicS
                       {isIngreso ? '+' : '-'}{t.amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                     </span>
                   </td>
+                  <td className="px-6 py-4 border-b border-slate-50 text-right print:hidden">
+                    <button
+                      onClick={() => setShowDeleteModal(t.id)}
+                      className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                      title="Eliminar asiento"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </td>
                 </tr>
               );
             })}
             {filteredTransactions.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-6 py-16 text-center">
+                <td colSpan={7} className="px-6 py-16 text-center">
                   <div className="flex flex-col items-center justify-center text-slate-400">
                     <FileText className="w-12 h-12 mb-3 text-slate-200" />
                     <span className="text-xs font-black uppercase tracking-widest">No hay movimientos en este rango</span>
@@ -638,10 +690,6 @@ function JournalTab({ transactions, accounts, addTransaction, matches, economicS
                 </li>
                 <li className="flex items-center text-xs font-bold text-slate-700">
                   <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2" />
-                  Membresía AEMF: {economicSettings.aemf_membership || 0} €
-                </li>
-                <li className="flex items-center text-xs font-bold text-slate-700">
-                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2" />
                   Voluntario Administrativo: {economicSettings.collaborator_monthly_cost || 0} €
                 </li>
                 <li className="flex items-center text-xs font-bold text-slate-700">
@@ -678,9 +726,9 @@ function JournalTab({ transactions, accounts, addTransaction, matches, economicS
               <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-6">
                 <RefreshCw className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">Conciliación de Jornada</h3>
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">Conciliación de Partidos</h3>
               <p className="text-sm font-bold text-slate-500 leading-relaxed mb-6">
-                Selecciona un periodo para resincronizar todos los asientos contables automáticos (Árbitros, Campos e Ingresos) y asegurar que coinciden con los datos actuales.
+                Selecciona un periodo para resincronizar todos los asientos contables automáticos (solo Ingresos por arbitrajes) y asegurar que coinciden con los datos actuales de los partidos liquidados.
               </p>
               
               <div className="mb-8">
@@ -711,6 +759,91 @@ function JournalTab({ transactions, accounts, addTransaction, matches, economicS
                   className="flex-1 py-4 bg-amber-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-amber-700 transition-all shadow-lg shadow-amber-100"
                 >
                   {isProcessing ? 'Sincronizando...' : 'Sincronizar Jornada'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300">
+            <div className="p-8">
+              <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mb-6">
+                <AlertTriangle className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">Eliminar Asiento</h3>
+              <p className="text-sm font-bold text-slate-500 leading-relaxed mb-6">
+                ¿Estás seguro de que deseas eliminar este asiento contable? Esta acción no se puede deshacer y modificará los balances correspondientes.
+              </p>
+              
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowDeleteModal(null)}
+                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={async () => {
+                    const idToDelete = showDeleteModal;
+                    setShowDeleteModal(null);
+                    setSelectedTransactions(prev => prev.filter(id => id !== idToDelete));
+                    await deleteTransaction(idToDelete);
+                    toast.success('Asiento eliminado correctamente');
+                  }}
+                  className="flex-1 py-4 bg-rose-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-100 cursor-pointer"
+                >
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBlockDeleteModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300">
+            <div className="p-8">
+              <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mb-6">
+                <AlertTriangle className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">Eliminar {selectedTransactions.length} Asientos</h3>
+              <p className="text-sm font-bold text-slate-500 leading-relaxed mb-6">
+                ¿Estás seguro de que deseas eliminar los asientos seleccionados? Esta acción no se puede deshacer y modificará los balances correspondientes.
+              </p>
+              
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowBlockDeleteModal(false)}
+                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all cursor-pointer"
+                  disabled={isProcessing}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={async () => {
+                    setIsProcessing(true);
+                    try {
+                      for (const id of selectedTransactions) {
+                        await deleteTransaction(id);
+                      }
+                      setSelectedTransactions([]);
+                      setShowBlockDeleteModal(false);
+                      toast.success(`${selectedTransactions.length} asientos eliminados`);
+                    } catch (error) {
+                      console.error("Error deleting transactions:", error);
+                      toast.error('Error al eliminar los asientos');
+                    } finally {
+                      setIsProcessing(false);
+                    }
+                  }}
+                  disabled={isProcessing}
+                  className="flex-1 py-4 bg-rose-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-100 cursor-pointer disabled:opacity-50"
+                >
+                  {isProcessing ? 'Eliminando...' : 'Eliminar Todo'}
                 </button>
               </div>
             </div>
@@ -1046,10 +1179,15 @@ function SummaryTab({ transactions, accounts }: any) {
                       {format(parseISO(t.date), 'dd/MM/yyyy')}
                     </td>
                     <td className="px-4 py-3 print:px-2 print:py-1.5 text-xs print:text-[10px] font-medium text-slate-700 print:text-black">
-                      {t.description}
-                      {t.isAutomated && (
-                        <span className="ml-2 px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded text-[8px] font-black uppercase">AUTO</span>
-                      )}
+                      <div className="flex items-start gap-2">
+                        {t.type === 'Ingreso' ? <TrendingUp className="w-3.5 h-3.5 mt-0.5 text-emerald-500 flex-shrink-0 print:hidden" /> : <TrendingDown className="w-3.5 h-3.5 mt-0.5 text-rose-500 flex-shrink-0 print:hidden" />}
+                        <span className="break-words leading-tight mt-0.5">
+                          {t.description}
+                          {t.isAutomated && (
+                            <span className="ml-2 px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded text-[8px] font-black uppercase inline-block">AUTO</span>
+                          )}
+                        </span>
+                      </div>
                     </td>
                     <td className={`px-4 py-3 print:px-2 print:py-1.5 text-xs font-black text-right tabular-nums print:text-[10px] print:text-black ${t.type === 'Ingreso' ? 'text-emerald-600' : 'text-rose-600'}`}>
                       {t.type === 'Ingreso' ? '+' : '-'}{t.amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €

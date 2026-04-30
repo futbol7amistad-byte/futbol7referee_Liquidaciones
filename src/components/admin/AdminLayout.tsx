@@ -45,7 +45,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navigation = allNavigation.filter(item => {
     if (user?.role === 'admin') return true;
     if (user?.role === 'collaborator') {
-      return ['Panel', 'Árbitros', 'Equipos', 'Liquidaciones', 'Economía'].includes(item.name);
+      return ['Panel', 'Árbitros', 'Equipos', 'Economía'].includes(item.name);
     }
     return false;
   });

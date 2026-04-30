@@ -128,7 +128,7 @@ export default function AdminLayoutContainer({ children }: { children: React.Rea
   const menuItems = allMenuItems.filter(item => {
     if (user?.role === 'admin') return true;
     if (user?.role === 'collaborator') {
-      return ['Panel', 'Árbitros', 'Equipos', 'Cobros Equipos', 'Gestión Económica', 'Liquidaciones'].includes(item.name);
+      return ['Panel', 'Árbitros', 'Equipos', 'Cobros Equipos', 'Gestión Económica'].includes(item.name);
     }
     return false;
   });

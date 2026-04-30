@@ -45,6 +45,7 @@ interface DataContextType {
   updateAccountingAccount: (id: string, data: Partial<AccountingAccount>) => void;
   deleteAccountingAccount: (id: string) => void;
   addTransaction: (transaction: Omit<AccountingTransaction, 'id' | 'created_at'>) => void;
+  deleteTransaction: (id: string) => void;
   updateEconomicSettings: (settings: Partial<EconomicSettings>) => void;
   updateTeamEconomicStatus: (teamId: string, status: Partial<TeamEconomicStatus>) => void;
   clearAllEconomicData: () => Promise<void>;
@@ -221,7 +222,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (matchDoc.status === 'Liquidado') {
         const refereeDoc = referees.find(r => r.id === matchDoc.referee_id);
         
-        // 1. Referee Payment (Gasto)
+        // 1. Referee Payment (Gasto) - Desactivado por petición del usuario para hacerlo en bloque mensual
+        /*
         if (economicSettings.referee_payment_standard > 0) {
           const account = accounts.find(a => a && a.name.toLowerCase().includes('arbitraje') && a.type === 'Gasto');
           if (account) {
@@ -238,8 +240,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             });
           }
         }
+        */
 
-        // 2. Venue Rental (Gasto)
+        // 2. Venue Rental (Gasto) - Desactivado por petición del usuario para hacerlo en bloque mensual
+        /*
         const venueRate = economicSettings.venue_costs?.find(v => v.venue_name === matchDoc.field)?.hourly_rate || 0;
         if (venueRate > 0) {
           const venueAccount = accounts.find(a => a && a.name.toLowerCase().includes('instalaciones') && a.type === 'Gasto');
@@ -257,6 +261,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             });
           }
         }
+        */
 
         // 3. Match Income (Ingreso)
         const incomeAccount = accounts.find(a => a && a.name.toLowerCase().includes('partidos') && a.type === 'Ingreso');
@@ -265,22 +270,25 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           const paymentsSnapshot = await getDocs(paymentsQuery);
           const matchPayments = paymentsSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as MatchPayment));
 
+          let totalIncome = 0;
           for (const p of matchPayments) {
             if (p.is_paid) {
-              const teamName = teams.find(t => t.id === p.team_id)?.name || 'Equipo';
-              const txRef = doc(collection(seasonRef, 'accounting_transactions'));
-              batch.set(txRef, {
-                date: matchDoc.match_date,
-                amount: p.amount,
-                accountId: incomeAccount.id,
-                description: `Ingreso Partido J.${matchDoc.match_round}: ${teamName} (${matchDoc.field})`,
-                relatedMatchId: matchId,
-                relatedTeamId: p.team_id,
-                isAutomated: true,
-                type: 'Ingreso',
-                created_at: new Date().toISOString()
-              });
+              totalIncome += p.amount;
             }
+          }
+
+          if (totalIncome > 0) {
+            const txRef = doc(collection(seasonRef, 'accounting_transactions'));
+            batch.set(txRef, {
+              date: matchDoc.match_date,
+              amount: totalIncome,
+              accountId: incomeAccount.id,
+              description: `Pago J. ${matchDoc.match_round} | ${matchDoc.field} | ${matchDoc.match_time || 'Sin hora'} | ${refereeDoc?.name?.toUpperCase() || 'ÁRBITRO'}`,
+              relatedMatchId: matchId,
+              isAutomated: true,
+              type: 'Ingreso',
+              created_at: new Date().toISOString()
+            });
           }
         }
       }
@@ -523,6 +531,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const deleteTransaction = async (id: string) => {
+    if (!currentSeason) return;
+    await deleteDoc(doc(db, 'seasons', currentSeason.id, 'accounting_transactions', id));
+  };
+
   const updateEconomicSettings = async (newSettings: Partial<EconomicSettings>) => {
     if (!currentSeason) return;
     await setDoc(doc(db, 'seasons', currentSeason.id, 'economic_settings', 'config'), newSettings, { merge: true });
@@ -578,7 +591,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       settings, updateSettings, updateMatchStatus,
       hiddenPeriods, hidePeriod, showPeriod,
       error, clearError: () => setError(null),
-      addAccountingAccount, updateAccountingAccount, deleteAccountingAccount, addTransaction, updateEconomicSettings, updateTeamEconomicStatus,
+      addAccountingAccount, updateAccountingAccount, deleteAccountingAccount, addTransaction, deleteTransaction, updateEconomicSettings, updateTeamEconomicStatus,
       clearAllEconomicData, syncMatchAccounting
     }}>
       {error && (

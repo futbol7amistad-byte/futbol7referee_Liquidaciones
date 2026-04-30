@@ -22,7 +22,7 @@ import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 
 export default function AdminSettlements() {
-  const { matches, referees, teams, economicSettings, error } = useData();
+  const { matches, referees, teams, economicSettings, error, accounts, addTransaction } = useData();
   
   if (error && error.includes('Quota exceeded') && matches.length === 0) {
     return (
@@ -52,6 +52,8 @@ export default function AdminSettlements() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [activeView, setActiveView] = useState<'liquidations' | 'analytics' | 'audit'>('liquidations');
+  const [confirmModalType, setConfirmModalType] = useState<'referees' | 'fields' | null>(null);
+  const [isProcessingJournal, setIsProcessingJournal] = useState(false);
 
   // Rates from economicSettings
   const REFEREE_FEE = economicSettings?.referee_payment_standard ?? 25; 
@@ -129,6 +131,73 @@ export default function AdminSettlements() {
 
   const totalRefereeExpense = useMemo(() => refereeSettlements.reduce((sum, r) => sum + r.totalAmount, 0), [refereeSettlements]);
   const totalFieldExpense = useMemo(() => fieldSettlements.reduce((sum, f) => sum + f.totalAmount, 0), [fieldSettlements]);
+
+  const handleRegisterJournalClick = (type: 'referees' | 'fields') => {
+    if (type === 'referees' && totalRefereeExpense <= 0) return toast.error('No hay gastos de árbitros en este periodo');
+    if (type === 'fields' && totalFieldExpense <= 0) return toast.error('No hay gastos de campos en este periodo');
+    setConfirmModalType(type);
+  };
+
+  const executeRegisterJournal = async () => {
+    if (!confirmModalType) return;
+    const type = confirmModalType;
+    setIsProcessingJournal(true);
+    
+    const formattedStartDate = format(parseISO(dateRange.start), 'dd/MM/yyyy');
+    const formattedEndDate = format(parseISO(dateRange.end), 'dd/MM/yyyy');
+    
+    if (type === 'referees') {
+        let accountId = '';
+        const refereeAccount = accounts?.find(a => a?.name?.toLowerCase().includes('arbitraje') && a?.type === 'Gasto');
+        if (refereeAccount) accountId = refereeAccount.id;
+        
+        if (!accountId) {
+             setIsProcessingJournal(false);
+             return toast.error('No se ha encontrado ninguna cuenta de gasto compatible (con "arbitraje" en el nombre)');
+        }
+        
+        try {
+            await addTransaction({
+                date: dateRange.end,
+                amount: totalRefereeExpense,
+                accountId,
+                description: `Pagos Arbitros periodo (${formattedStartDate} al ${formattedEndDate})`,
+                isAutomated: false,
+                type: 'Gasto'
+            });
+            toast.success('Gasto de árbitros registrado en el Libro Diario');
+            setConfirmModalType(null);
+        } catch (err) {
+             toast.error('Error al registrar en el Libro Diario');
+        }
+    } else if (type === 'fields') {
+        let accountId = '';
+        // Look for accounts with 'alquiler' or 'instalaciones' in the name
+        const fieldAccount = accounts?.find(a => (a?.name?.toLowerCase().includes('alquiler') || a?.name?.toLowerCase().includes('instalacion') || a?.name?.toLowerCase().includes('instalación')) && a?.type === 'Gasto');
+        if (fieldAccount) accountId = fieldAccount.id;
+        
+        if (!accountId) {
+             setIsProcessingJournal(false);
+             return toast.error('No se ha encontrado ninguna cuenta de gasto compatible (con "alquiler" o "instalacion" en el nombre)');
+        }
+        
+        try {
+            await addTransaction({
+                date: dateRange.end,
+                amount: totalFieldExpense,
+                accountId,
+                description: `Alquiler campos periodo (${formattedStartDate} al ${formattedEndDate})`,
+                isAutomated: false,
+                type: 'Gasto'
+            });
+            toast.success('Gasto de campos registrado en el Libro Diario');
+            setConfirmModalType(null);
+        } catch (err) {
+             toast.error('Error al registrar en el Libro Diario');
+        }
+    }
+    setIsProcessingJournal(false);
+  };
 
   const handleDownloadPDF = async (type: 'referees' | 'fields' | 'full') => {
     const doc = new jsPDF();
@@ -368,13 +437,20 @@ export default function AdminSettlements() {
                     </tbody>
                   </table>
                 </div>
-                <div className="p-6 flex justify-center border-t border-slate-50">
+                <div className="p-6 flex flex-col sm:flex-row items-center justify-center gap-3 border-t border-slate-50">
                     <button 
                       onClick={() => handleDownloadPDF('referees')}
-                      className="px-8 py-3 flex items-center justify-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 border border-indigo-100 rounded-full hover:bg-indigo-600 hover:text-white transition-all active:scale-[0.98] shadow-md shadow-indigo-100/50"
+                      className="w-full sm:w-auto px-8 py-3 flex items-center justify-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 border border-indigo-100 rounded-full hover:bg-indigo-600 hover:text-white transition-all active:scale-[0.98] shadow-md shadow-indigo-100/50"
                     >
                       <Download className="w-3.5 h-3.5" />
                       Descargar Liquidación Árbitros
+                    </button>
+                    <button 
+                      onClick={() => handleRegisterJournalClick('referees')}
+                      className="w-full sm:w-auto px-8 py-3 flex items-center justify-center gap-2 text-[10px] font-black text-rose-600 uppercase tracking-widest bg-rose-50 border border-rose-100 rounded-full hover:bg-rose-600 hover:text-white transition-all active:scale-[0.98] shadow-md shadow-rose-100/50"
+                    >
+                      <Banknote className="w-3.5 h-3.5" />
+                      Registrar en Diario
                     </button>
                 </div>
               </div>
@@ -439,13 +515,20 @@ export default function AdminSettlements() {
                     </tbody>
                   </table>
                 </div>
-                <div className="p-6 flex justify-center border-t border-slate-50">
+                <div className="p-6 flex flex-col sm:flex-row items-center justify-center gap-3 border-t border-slate-50">
                     <button 
                        onClick={() => handleDownloadPDF('fields')}
-                      className="px-8 py-3 flex items-center justify-center gap-2 text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 border border-emerald-100 rounded-full hover:bg-emerald-600 hover:text-white transition-all active:scale-[0.98] shadow-md shadow-emerald-100/50"
+                      className="w-full sm:w-auto px-8 py-3 flex items-center justify-center gap-2 text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 border border-emerald-100 rounded-full hover:bg-emerald-600 hover:text-white transition-all active:scale-[0.98] shadow-md shadow-emerald-100/50"
                     >
                       <Download className="w-3.5 h-3.5" />
                       Descargar Liquidación Campos
+                    </button>
+                    <button 
+                      onClick={() => handleRegisterJournalClick('fields')}
+                      className="w-full sm:w-auto px-8 py-3 flex items-center justify-center gap-2 text-[10px] font-black text-rose-600 uppercase tracking-widest bg-rose-50 border border-rose-100 rounded-full hover:bg-rose-600 hover:text-white transition-all active:scale-[0.98] shadow-md shadow-rose-100/50"
+                    >
+                      <Banknote className="w-3.5 h-3.5" />
+                      Registrar en Diario
                     </button>
                 </div>
               </div>
@@ -533,6 +616,44 @@ export default function AdminSettlements() {
            </div>
         </div>
       </div>
+
+      {confirmModalType && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300">
+            <div className="p-8">
+              <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mb-6">
+                <Banknote className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2">Registrar en Diario</h3>
+              <p className="text-sm font-bold text-slate-500 leading-relaxed mb-6">
+                ¿Estás seguro de que deseas registrar este movimiento en bloque en el Libro Diario? 
+                <br/><br/>
+                <span className="font-black text-slate-600">Periodo:</span> {format(parseISO(dateRange.start), 'dd/MM/yyyy')} al {format(parseISO(dateRange.end), 'dd/MM/yyyy')}
+                <br/>
+                <span className="font-black text-slate-600">Importe:</span> {confirmModalType === 'referees' ? totalRefereeExpense.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : totalFieldExpense.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+              </p>
+              
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setConfirmModalType(null)}
+                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all cursor-pointer"
+                  disabled={isProcessingJournal}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={executeRegisterJournal}
+                  className="flex-1 py-4 bg-rose-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-100 cursor-pointer disabled:opacity-50"
+                  disabled={isProcessingJournal}
+                >
+                  {isProcessingJournal ? 'Procesando...' : 'Confirmar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
