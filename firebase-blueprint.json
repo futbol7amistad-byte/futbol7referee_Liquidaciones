@@ -85,6 +85,21 @@
       },
       "required": ["id", "seasonId", "match_date", "match_time", "team_a_id", "team_b_id"]
     },
+    "RefereeAdvance": {
+      "title": "Referee Advance",
+      "description": "Financial cash advance given to a referee.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "seasonId": { "type": "string" },
+        "referee_id": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date" },
+        "notes": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "seasonId", "referee_id", "amount", "date"]
+    },
     "AccountingAccount": {
       "title": "Accounting Account",
       "description": "Chart of accounts entry.",
@@ -143,6 +158,10 @@
     "/seasons/{seasonId}/accounting_accounts/{accountId}": {
       "schema": "AccountingAccount",
       "description": "Chart of accounts for a season."
+    },
+    "/seasons/{seasonId}/referee_advances/{advanceId}": {
+      "schema": "RefereeAdvance",
+      "description": "Advances given to referees during the season."
     },
     "/seasons/{seasonId}/accounting_transactions/{transactionId}": {
       "schema": "AccountingTransaction",

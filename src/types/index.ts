@@ -56,7 +56,7 @@ export interface Match {
   team_b_name?: string;
   competition: string;
   referee_id: string;
-  status?: 'Programado' | 'Liquidado';
+  status?: 'Programado' | 'Liquidado' | 'Suspendido' | 'Aplazado';
   period?: string; // YYYY-MM-DD_to_YYYY-MM-DD
   level: 1 | 2 | 3;
 }
@@ -78,6 +78,15 @@ export interface CashDelivery {
   date: string;
   created_at: string;
   period?: string; // Add period field to link to the specific week/jornada
+}
+
+export interface RefereeAdvance {
+  id: string;
+  referee_id: string;
+  amount: number;
+  date: string;
+  notes?: string;
+  created_at: string;
 }
 
 export interface AppSettings {

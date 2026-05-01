@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Match, MatchPayment, Referee, Team, CashDelivery, Sanction, AccountingAccount, AccountingTransaction, EconomicSettings, TeamEconomicStatus } from '../types';
+import { Match, MatchPayment, Referee, Team, CashDelivery, Sanction, AccountingAccount, AccountingTransaction, EconomicSettings, TeamEconomicStatus, RefereeAdvance } from '../types';
 import { useSeason } from '../contexts/SeasonContext';
 import { db } from '../lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, setDoc, writeBatch, getDocs, getDoc, orderBy, where } from 'firebase/firestore';
@@ -11,12 +11,15 @@ interface DataContextType {
   teams: Team[];
   deliveries: CashDelivery[];
   sanctions: Sanction[];
+  refereeAdvances: RefereeAdvance[];
   accounts: AccountingAccount[];
   transactions: AccountingTransaction[];
   economicSettings: EconomicSettings;
   teamEconomicStatus: TeamEconomicStatus[];
   addPayment: (payment: Omit<MatchPayment, 'id' | 'created_at'>) => Promise<void>;
   addDelivery: (delivery: Omit<CashDelivery, 'id' | 'created_at'>) => void;
+  addRefereeAdvance: (advance: Omit<RefereeAdvance, 'id' | 'created_at'>) => void;
+  deleteRefereeAdvance: (id: string) => void;
   addReferee: (referee: Omit<Referee, 'id'>) => void;
   updateReferee: (id: string, data: Partial<Referee>) => void;
   deleteReferee: (id: string) => void;
@@ -34,7 +37,7 @@ interface DataContextType {
   showPeriod: (period: string) => void;
   addTeam: (data: Partial<Team>) => Promise<string>;
   updateTeam: (id: string, data: Partial<Team>) => Promise<void>;
-  updateMatchStatus: (matchId: string, status: 'Programado' | 'Liquidado') => Promise<void>;
+  updateMatchStatus: (matchId: string, status: 'Programado' | 'Liquidado' | 'Suspendido' | 'Aplazado') => Promise<void>;
   assignmentResults: any[];
   setAssignmentResults: (results: any[]) => void;
   settings: AppSettings;
@@ -74,6 +77,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [deliveries, setDeliveries] = useState<CashDelivery[]>([]);
   const [sanctions, setSanctions] = useState<Sanction[]>([]);
+  const [refereeAdvances, setRefereeAdvances] = useState<RefereeAdvance[]>([]);
   const [accounts, setAccounts] = useState<AccountingAccount[]>([]);
   const [transactions, setTransactions] = useState<AccountingTransaction[]>([]);
   const [economicSettings, setEconomicSettings] = useState<EconomicSettings>({
@@ -166,6 +170,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       (snapshot) => setSanctions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sanction))),
       handleError
     );
+    const unsubRefereeAdvances = onSnapshot(collection(seasonRef, 'referee_advances'),
+      (snapshot) => setRefereeAdvances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RefereeAdvance))),
+      handleError
+    );
     const unsubAccounts = onSnapshot(collection(seasonRef, 'accounting_accounts'), 
       (snapshot) => setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccountingAccount))),
       handleError
@@ -186,6 +194,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       unsubTeams();
       unsubDeliveries();
       unsubSanctions();
+      unsubRefereeAdvances();
       unsubAccounts();
       unsubTransactions();
       unsubTeamEconomic();
@@ -322,6 +331,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const addRefereeAdvance = async (advance: Omit<RefereeAdvance, 'id' | 'created_at'>) => {
+    if (!currentSeason) return;
+    await addDoc(collection(db, 'seasons', currentSeason.id, 'referee_advances'), {
+      ...advance,
+      created_at: new Date().toISOString(),
+    });
+  };
+
+  const deleteRefereeAdvance = async (id: string) => {
+    if (!currentSeason) return;
+    await deleteDoc(doc(db, 'seasons', currentSeason.id, 'referee_advances', id));
+  };
+
   const addReferee = async (referee: Omit<Referee, 'id'>) => {
     if (!currentSeason) return;
     await addDoc(collection(db, 'seasons', currentSeason.id, 'referees'), referee);
@@ -344,11 +366,35 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       is_paid: false,
       created_at: new Date().toISOString(),
     });
+    
+    // Update team document
+    const teamDoc = await getDoc(doc(db, 'seasons', currentSeason.id, 'teams', sanction.team_id));
+    if (teamDoc.exists()) {
+      const teamData = teamDoc.data();
+      await updateDoc(doc(db, 'seasons', currentSeason.id, 'teams', sanction.team_id), {
+        total_sanctions: (teamData.total_sanctions || 0) + 1,
+        pending_amount: (teamData.pending_amount || 0) + sanction.amount
+      });
+    }
   };
 
   const markSanctionAsPaid = async (id: string) => {
     if (!currentSeason) return;
-    await updateDoc(doc(db, 'seasons', currentSeason.id, 'sanctions', id), { is_paid: true });
+    const sanctionDoc = await getDoc(doc(db, 'seasons', currentSeason.id, 'sanctions', id));
+    
+    if (sanctionDoc.exists()) {
+      const sanctionData = sanctionDoc.data() as Sanction;
+      await updateDoc(doc(db, 'seasons', currentSeason.id, 'sanctions', id), { is_paid: true });
+      
+      // Update team document
+      const teamDoc = await getDoc(doc(db, 'seasons', currentSeason.id, 'teams', sanctionData.team_id));
+      if (teamDoc.exists()) {
+        const teamData = teamDoc.data();
+        await updateDoc(doc(db, 'seasons', currentSeason.id, 'teams', sanctionData.team_id), {
+          pending_amount: Math.max(0, (teamData.pending_amount || 0) - sanctionData.amount)
+        });
+      }
+    }
   };
 
 
@@ -500,7 +546,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     await setDoc(settingsRef, { ...settings, ...newSettings }, { merge: true });
   };
 
-  const updateMatchStatus = async (matchId: string, status: 'Programado' | 'Liquidado') => {
+  const updateMatchStatus = async (matchId: string, status: 'Programado' | 'Liquidado' | 'Suspendido' | 'Aplazado') => {
     if (!currentSeason) return;
     await updateDoc(doc(db, 'seasons', currentSeason.id, 'matches', matchId), { status });
     
@@ -582,10 +628,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <DataContext.Provider value={{ 
-      matches, payments, referees, teams, deliveries, sanctions,
+      matches, payments, referees, teams, deliveries, sanctions, refereeAdvances,
       accounts, transactions, economicSettings, teamEconomicStatus,
       assignmentResults, setAssignmentResults,
-      addPayment, addDelivery, addReferee, updateReferee, deleteReferee,
+      addPayment, addDelivery, addRefereeAdvance, deleteRefereeAdvance, addReferee, updateReferee, deleteReferee,
       addSanction, markSanctionAsPaid, clearSanctions,
       importMatches, reassignReferee, clearMatchesInRange, clearMatchesByPeriod, deleteMatch, clearAllMatches, addTeam, updateTeam,
       settings, updateSettings, updateMatchStatus,

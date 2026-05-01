@@ -15,14 +15,14 @@ import {
   Building2
 } from 'lucide-react';
 import { useData } from '../../store/DataContext';
-import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from 'date-fns';
+import { format, isWithinInterval, startOfDay, endOfDay, parseISO, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 
 export default function AdminSettlements() {
-  const { matches, referees, teams, economicSettings, error, accounts, addTransaction } = useData();
+  const { matches, referees, teams, economicSettings, error, accounts, addTransaction, refereeAdvances, addRefereeAdvance, deleteRefereeAdvance } = useData();
   
   if (error && error.includes('Quota exceeded') && matches.length === 0) {
     return (
@@ -46,7 +46,7 @@ export default function AdminSettlements() {
   }
 
   const [dateRange, setDateRange] = useState({
-    start: format(new Date(), 'yyyy-MM-01'),
+    start: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
     end: format(new Date(), 'yyyy-MM-dd')
   });
 
@@ -54,6 +54,11 @@ export default function AdminSettlements() {
   const [activeView, setActiveView] = useState<'liquidations' | 'analytics' | 'audit'>('liquidations');
   const [confirmModalType, setConfirmModalType] = useState<'referees' | 'fields' | null>(null);
   const [isProcessingJournal, setIsProcessingJournal] = useState(false);
+  const [showAdvanceModal, setShowAdvanceModal] = useState(false);
+  const [advanceRefereeId, setAdvanceRefereeId] = useState<string>('');
+  const [advanceAmount, setAdvanceAmount] = useState<number | ''>('');
+  const [advanceDate, setAdvanceDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [advanceNotes, setAdvanceNotes] = useState<string>('');
 
   // Rates from economicSettings
   const REFEREE_FEE = economicSettings?.referee_payment_standard ?? 25; 
@@ -102,15 +107,33 @@ export default function AdminSettlements() {
   const refereeSettlements = useMemo(() => {
     return referees.map(ref => {
       const refMatches = filteredMatches.filter(m => m.referee_id === ref.id);
-      const totalAmount = refMatches.length * REFEREE_FEE;
+      const totalMatchAmount = refMatches.length * REFEREE_FEE;
+      
+      const start = parseISO(dateRange.start);
+      const end = parseISO(dateRange.end);
+      
+      const refAdvances = (refereeAdvances || []).filter(a => {
+        if (a.referee_id !== ref.id) return false;
+        try {
+          return isWithinInterval(parseISO(a.date), { start, end });
+        } catch (e) {
+          return false;
+        }
+      });
+      const totalAdvances = refAdvances.reduce((sum, a) => sum + a.amount, 0);
+      
+      const totalAmount = totalMatchAmount - totalAdvances;
+
       return {
         ...ref,
         matchCount: refMatches.length,
+        totalMatchAmount,
+        totalAdvances,
         totalAmount
       };
-    }).filter(r => r.matchCount > 0)
-      .sort((a, b) => b.totalAmount - a.totalAmount);
-  }, [referees, filteredMatches, REFEREE_FEE]);
+    }).filter(r => r.matchCount > 0 || r.totalAdvances > 0)
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }, [referees, filteredMatches, REFEREE_FEE, refereeAdvances, dateRange]);
 
   // Calculate field totals
   const fieldSettlements = useMemo(() => {
@@ -400,35 +423,53 @@ export default function AdminSettlements() {
                   <table className="w-full text-left border-separate border-spacing-0">
                     <thead>
                       <tr className="bg-slate-50">
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Árbitro</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Partidos</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Monto</th>
+                        <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Árbitro</th>
+                        <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center whitespace-nowrap">Partidos</th>
+                        <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right whitespace-nowrap">Adelantos</th>
+                        <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right whitespace-nowrap">A Pagar</th>
+                        <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center whitespace-nowrap">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {refereeSettlements.map((ref) => (
                         <tr key={ref.id} className="hover:bg-slate-50 transition-colors group">
-                          <td className="px-6 py-4">
+                          <td className="px-4 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-3">
                               <img src={ref.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(ref.name)}&background=random`} alt="" className="w-8 h-8 rounded-lg object-cover border border-slate-100" />
                               <span className="text-xs font-black text-slate-700 uppercase tracking-tight">{ref.name}</span>
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-center">
-                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-[10px] font-black text-slate-600">
+                          <td className="px-4 py-4 text-center whitespace-nowrap">
+                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-[10px] font-black text-slate-600" title={`${ref.totalMatchAmount} € generados`}>
                               {ref.matchCount}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-right">
+                          <td className="px-4 py-4 text-right whitespace-nowrap">
+                            <span className={`text-xs font-black tracking-tighter ${ref.totalAdvances > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                              {ref.totalAdvances > 0 ? '-' : ''}{ref.totalAdvances.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-right whitespace-nowrap">
                             <span className="text-xs font-black text-indigo-600 tracking-tighter">
                               {ref.totalAmount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                             </span>
+                          </td>
+                          <td className="px-4 py-4 text-center whitespace-nowrap">
+                            <button
+                              onClick={() => {
+                                setAdvanceRefereeId(ref.id);
+                                setShowAdvanceModal(true);
+                              }}
+                              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all uppercase tracking-widest"
+                            >
+                              Adelanto
+                            </button>
                           </td>
                         </tr>
                       ))}
                       {refereeSettlements.length === 0 && (
                         <tr>
-                          <td colSpan={3} className="px-6 py-12 text-center">
+                          <td colSpan={5} className="px-6 py-12 text-center">
                             <Clock className="w-8 h-8 text-slate-200 mx-auto mb-2" />
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No hay datos en este periodo</p>
                           </td>
@@ -473,15 +514,15 @@ export default function AdminSettlements() {
                   <table className="w-full text-left border-separate border-spacing-0">
                     <thead>
                       <tr className="bg-slate-50">
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Localización / Campo</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Horas/Partidos</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Monto</th>
+                        <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Localización / Campo</th>
+                        <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center whitespace-nowrap">Horas/Partidos</th>
+                        <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right whitespace-nowrap">Monto</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {fieldSettlements.map((field) => (
                         <tr key={field.name} className="hover:bg-slate-50 transition-colors group">
-                          <td className="px-6 py-4 text-xs font-black text-slate-700 uppercase tracking-tight">
+                          <td className="px-4 py-4 text-xs font-black text-slate-700 uppercase tracking-tight whitespace-nowrap">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
                                 <MapPin className="w-4 h-4 text-emerald-500" />
@@ -492,12 +533,12 @@ export default function AdminSettlements() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-center">
+                          <td className="px-4 py-4 text-center whitespace-nowrap">
                             <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-[10px] font-black text-slate-600">
                               {field.matchCount}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-right">
+                          <td className="px-4 py-4 text-right whitespace-nowrap">
                             <span className="text-xs font-black text-emerald-600 tracking-tighter">
                               {field.totalAmount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                             </span>
@@ -654,6 +695,100 @@ export default function AdminSettlements() {
         </div>
       )}
 
+      {showAdvanceModal && advanceRefereeId && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl border border-white/20">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500 border border-indigo-100 shadow-inner">
+                <Banknote className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-display font-black text-slate-900 uppercase tracking-tight">Adelanto</h3>
+                <p className="text-xs font-bold text-slate-400 capitalize">
+                  {referees.find(r => r.id === advanceRefereeId)?.name}
+                </p>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Importe (€)</label>
+                <div className="relative">
+                  <Euro className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
+                  <input
+                    type="number"
+                    value={advanceAmount}
+                    onChange={(e) => setAdvanceAmount(Number(e.target.value))}
+                    min="1"
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-lg font-black focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-300"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Fecha</label>
+                <div className="relative">
+                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400" />
+                  <input
+                    type="date"
+                    value={advanceDate}
+                    onChange={(e) => setAdvanceDate(e.target.value)}
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Concepto (Opcional)</label>
+                <input
+                  type="text"
+                  value={advanceNotes}
+                  onChange={(e) => setAdvanceNotes(e.target.value)}
+                  placeholder="Ej. Adelanto 15 Mayo"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-300"
+                />
+              </div>
+            </div>
+
+            <div className="mt-8 flex gap-3">
+              <button 
+                onClick={() => setShowAdvanceModal(false)}
+                className="flex-1 py-3 px-4 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => {
+                  if (typeof advanceAmount !== 'number' || advanceAmount <= 0) {
+                    toast.error('Introduzca un importe válido');
+                    return;
+                  }
+                  if (!advanceDate) {
+                    toast.error('Seleccione una fecha');
+                    return;
+                  }
+                  
+                  addRefereeAdvance({
+                    referee_id: advanceRefereeId,
+                    amount: advanceAmount,
+                    date: advanceDate,
+                    notes: advanceNotes
+                  });
+                  toast.success('Adelanto registrado correctamente');
+                  setShowAdvanceModal(false);
+                  setAdvanceAmount('');
+                  setAdvanceNotes('');
+                }}
+                className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.98]"
+              >
+                Registrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -682,6 +817,7 @@ function ProfitabilityAnalytics({ matches, teams, settings }: any) {
       }, 0);
 
       return {
+        id: team.id,
         name: team.name,
         matchCount: teamMatches.length,
         expense
@@ -699,7 +835,7 @@ function ProfitabilityAnalytics({ matches, teams, settings }: any) {
         
         <div className="space-y-4">
           {teamAnalysis.map((t: any) => (
-            <div key={t.name} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-2xl">
+            <div key={t.id} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-2xl">
               <div>
                 <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{t.name}</p>
                 <div className="flex gap-4 mt-1">

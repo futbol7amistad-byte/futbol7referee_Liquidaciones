@@ -13,7 +13,7 @@ import { es } from 'date-fns/locale';
 import PublicCalendar from '../PublicCalendar';
 
 export default function AdminCalendar() {
-  const { matches: matchesRaw, referees, teams, importMatches, reassignReferee, clearMatchesInRange, deleteMatch, clearAllMatches, clearMatchesByPeriod, hiddenPeriods } = useData();
+  const { matches: matchesRaw, referees, teams, importMatches, reassignReferee, clearMatchesInRange, deleteMatch, clearAllMatches, clearMatchesByPeriod, hiddenPeriods, updateMatchStatus, addSanction } = useData();
   const matches = matchesRaw.filter(m => !hiddenPeriods.includes(m.period || 'Sin periodo'));
   const [dragActive, setDragActive] = useState(false);
   const [tempMatches, setTempMatches] = useState<any[]>([]);
@@ -255,6 +255,12 @@ export default function AdminCalendar() {
   const [showRefereeLoadModal, setShowRefereeLoadModal] = useState(false);
   const [showDeletePeriodModal, setShowDeletePeriodModal] = useState<string | null>(null);
   const [matchToDelete, setMatchToDelete] = useState<string | null>(null);
+  const [matchToEditStatus, setMatchToEditStatus] = useState<Match | null>(null);
+  const [statusToSave, setStatusToSave] = useState<'Programado' | 'Liquidado' | 'Suspendido' | 'Aplazado'>('Programado');
+  const [applySanction, setApplySanction] = useState(false);
+  const [sanctionTeamId, setSanctionTeamId] = useState<string>('');
+  const [sanctionAmount, setSanctionAmount] = useState<number>(0);
+  const [sanctionReason, setSanctionReason] = useState<string>('Incomparecencia');
   const [showErrorModal, setShowErrorModal] = useState<string | null>(null);
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
 
@@ -729,6 +735,30 @@ export default function AdminCalendar() {
     }
   };
 
+  const handleSaveStatus = async () => {
+    if (!matchToEditStatus) return;
+    try {
+      if (applySanction && (statusToSave === 'Suspendido' || statusToSave === 'Aplazado') && sanctionTeamId) {
+        addSanction({
+          team_id: sanctionTeamId,
+          amount: sanctionAmount,
+          round: matchToEditStatus.match_round ? parseInt(matchToEditStatus.match_round.toString()) : 0,
+          date: new Date().toISOString().split('T')[0],
+          reason: sanctionReason
+        });
+      }
+      await updateMatchStatus(matchToEditStatus.id, statusToSave);
+      setMatchToEditStatus(null);
+      setApplySanction(false);
+      setSanctionAmount(0);
+      setSanctionReason('Incomparecencia');
+      setSanctionTeamId('');
+      setActionSuccessMessage('Estado actualizado correctamente');
+    } catch (err) {
+      setShowErrorModal('Error al actualizar el estado del partido');
+    }
+  };
+
   const handleConfirmWarning = () => {
     if (pendingReassignData) {
       reassignReferee(pendingReassignData.matchId, pendingReassignData.refId);
@@ -1145,6 +1175,7 @@ export default function AdminCalendar() {
                       <th className="px-4 py-3 text-left">Equipo A</th>
                       <th className="px-4 py-3 text-left">Equipo B</th>
                       <th className="px-4 py-3 text-left">Árbitro</th>
+                      <th className="px-4 py-3 text-center">Estado</th>
                       <th className="px-4 py-3 text-right">Acciones</th>
                     </tr>
                   </thead>
@@ -1153,6 +1184,7 @@ export default function AdminCalendar() {
                       const teamA = teams.find(t => t.id === m.team_a_id);
                       const teamB = teams.find(t => t.id === m.team_b_id);
                       const referee = referees.find(r => r.id === m.referee_id);
+                      const currentStatus = m.status || 'Programado';
                       return (
                         <tr 
                           key={m.id} 
@@ -1211,13 +1243,39 @@ export default function AdminCalendar() {
                               <span className="text-red-500 font-black text-[10px] uppercase">SIN ASIGNAR</span>
                             )}
                           </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border ${
+                              currentStatus === 'Liquidado' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                              currentStatus === 'Suspendido' ? 'bg-red-50 text-red-600 border-red-200' :
+                              currentStatus === 'Aplazado' ? 'bg-orange-50 text-orange-600 border-orange-200' :
+                              'bg-indigo-50 text-indigo-600 border-indigo-200'
+                            }`}>
+                              {currentStatus}
+                            </span>
+                          </td>
                           <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={() => setMatchToDelete(m.id)}
-                              className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <div className="flex justify-end items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  setMatchToEditStatus(m);
+                                  setStatusToSave(m.status || 'Programado');
+                                  setApplySanction(false);
+                                  setSanctionAmount(0);
+                                  setSanctionTeamId('');
+                                }}
+                                className="p-2 text-gray-400 hover:text-indigo-600 transition-colors"
+                                title="Cambiar Estado"
+                              >
+                                <RefreshCw className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setMatchToDelete(m.id)}
+                                className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1339,6 +1397,100 @@ export default function AdminCalendar() {
                 </button>
                 <button
                   onClick={() => setShowDeleteAllModal(false)}
+                  className="w-full py-4 bg-gray-100 text-gray-600 rounded-2xl font-black text-sm hover:bg-gray-200 transition-all active:scale-95"
+                >
+                  CANCELAR
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {matchToEditStatus && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-[0_30px_60px_rgba(0,0,0,0.3)] border border-gray-100 text-left relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-indigo-500"></div>
+              <h3 className="text-2xl font-black text-gray-900 mb-6">Cambiar Estado</h3>
+              
+              <div className="space-y-4 mb-8">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 justify-start uppercase tracking-widest mb-2 text-left">Estado del Partido</label>
+                  <select
+                    value={statusToSave}
+                    onChange={(e) => setStatusToSave(e.target.value as any)}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="Programado">Programado</option>
+                    <option value="Liquidado">Liquidado</option>
+                    <option value="Suspendido">Suspendido</option>
+                    <option value="Aplazado">Aplazado</option>
+                  </select>
+                </div>
+
+                {(statusToSave === 'Suspendido' || statusToSave === 'Aplazado') && (
+                  <div className="border border-red-100 bg-red-50/50 rounded-2xl p-4 space-y-4 mt-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <div className="relative flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          checked={applySanction}
+                          onChange={(e) => setApplySanction(e.target.checked)}
+                          className="peer sr-only"
+                        />
+                        <div className="w-5 h-5 rounded border border-red-300 bg-white peer-checked:bg-red-500 peer-checked:border-red-500 transition-colors"></div>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-white absolute inset-0 m-auto opacity-0 peer-checked:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="text-sm font-bold text-red-900">Aplicar sanción por incomparecencia</span>
+                    </label>
+
+                    {applySanction && (
+                      <div className="space-y-4 pt-2">
+                        <div>
+                          <label className="block text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">Equipo a Sancionar</label>
+                          <select
+                            value={sanctionTeamId}
+                            onChange={(e) => setSanctionTeamId(e.target.value)}
+                            className="w-full px-4 py-3 bg-white border border-red-200 rounded-xl text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-red-500/20"
+                          >
+                            <option value="">Selecciona un equipo...</option>
+                            <option value={matchToEditStatus.team_a_id}>{teams.find(t => t.id === matchToEditStatus.team_a_id)?.name || 'Equipo A'}</option>
+                            <option value={matchToEditStatus.team_b_id}>{teams.find(t => t.id === matchToEditStatus.team_b_id)?.name || 'Equipo B'}</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">Importe de la Sanción (€)</label>
+                          <input
+                            type="number"
+                            value={sanctionAmount || ''}
+                            onChange={(e) => setSanctionAmount(Number(e.target.value))}
+                            className="w-full px-4 py-3 bg-white border border-red-200 rounded-xl text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-red-500/20"
+                            placeholder="Ej: 50"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  onClick={handleSaveStatus}
+                  disabled={applySanction && (!sanctionTeamId || sanctionAmount <= 0)}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  GUARDAR CAMBIOS
+                </button>
+                <button
+                  onClick={() => {
+                    setMatchToEditStatus(null);
+                    setApplySanction(false);
+                  }}
                   className="w-full py-4 bg-gray-100 text-gray-600 rounded-2xl font-black text-sm hover:bg-gray-200 transition-all active:scale-95"
                 >
                   CANCELAR
