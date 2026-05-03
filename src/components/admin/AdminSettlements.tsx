@@ -431,8 +431,8 @@ export default function AdminSettlements() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {refereeSettlements.map((ref) => (
-                        <tr key={ref.id} className="hover:bg-slate-50 transition-colors group">
+                      {refereeSettlements.map((ref, idx) => (
+                        <tr key={`as-ref-${ref.id || 'no-id'}-${idx}`} className="hover:bg-slate-50 transition-colors group">
                           <td className="px-4 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-3">
                               <img src={ref.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(ref.name)}&background=random`} alt="" className="w-8 h-8 rounded-lg object-cover border border-slate-100" />
@@ -834,8 +834,8 @@ function ProfitabilityAnalytics({ matches, teams, settings }: any) {
         </h3>
         
         <div className="space-y-4">
-          {teamAnalysis.map((t: any) => (
-            <div key={t.id} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-2xl">
+          {teamAnalysis.map((t: any, index: number) => (
+            <div key={`sa-team-${t.id}-${index}`} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-2xl">
               <div>
                 <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{t.name}</p>
                 <div className="flex gap-4 mt-1">
@@ -900,8 +900,8 @@ function AccountingAudit({ transactions, accounts }: any) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {transactions.slice(0, 15).map((t: any) => (
-                <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
+              {transactions.slice(0, 15).map((t: any, idx: number) => (
+                <tr key={`sa-tx-${t.id}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-4 text-[11px] font-bold text-slate-500">{format(parseISO(t.date), 'dd/MM/yyyy')}</td>
                   <td className="px-6 py-4">
                     <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${t.isAutomated ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-600'}`}>

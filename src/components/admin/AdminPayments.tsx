@@ -72,11 +72,11 @@ const RefereeDetailsModal = ({ isOpen, onClose, referee, matches, teams }: any) 
       <div className="bg-white p-6 rounded-xl shadow-lg max-w-lg w-full max-h-[80vh] overflow-y-auto">
         <h3 className="text-lg font-bold mb-4 text-gray-900">Detalles del Árbitro: {referee.name}</h3>
         <div className="space-y-2">
-          {refMatches.map((m: any) => {
+          {refMatches.map((m: any, index: number) => {
             const teamA = teams.find((t: any) => t.id === m.team_a_id)?.name || 'Desconocido';
             const teamB = teams.find((t: any) => t.id === m.team_b_id)?.name || 'Desconocido';
             return (
-              <div key={m.id} className="p-3 bg-gray-50 rounded-lg text-sm border border-gray-200">
+              <div key={`m-${m.id || 'no-id'}-${index}`} className="p-3 bg-gray-50 rounded-lg text-sm border border-gray-200">
                 <p className="font-medium text-gray-900">{teamA} vs {teamB}</p>
                 <p className="text-gray-700">Fecha: {format(new Date(m.match_date), 'dd/MM/yyyy')} - Hora: {m.match_time} - Campo: {m.field}</p>
               </div>
@@ -205,7 +205,7 @@ export default function AdminPayments() {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {sortedData.map((i, index) => (
-                <React.Fragment key={i.id}>
+                <React.Fragment key={`impago-${i.id}-${index}`}>
                   <tr 
                     onClick={() => setExpandedImpagoId(expandedImpagoId === i.id ? null : i.id)}
                     className="hover:bg-slate-50/50 transition-all group animate-in fade-in slide-in-from-left-2 duration-300 cursor-pointer" 
@@ -315,8 +315,8 @@ export default function AdminPayments() {
                                   {impagos
                                     .filter(imp => imp.teamId === i.teamId && !imp.pagado)
                                     .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
-                                    .map(pending => (
-                                      <div key={pending.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm gap-4 hover:border-indigo-200 hover:shadow-md transition-all">
+                                    .map((pending, pendingIndex) => (
+                                      <div key={`pending-${pending.id || 'no-id'}-${pendingIndex}`} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm gap-4 hover:border-indigo-200 hover:shadow-md transition-all">
                                         <div className="flex items-center gap-4">
                                           <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center text-xs font-black text-red-600 border border-red-100 shadow-inner">
                                             {pending.jornada}
@@ -531,7 +531,7 @@ export default function AdminPayments() {
                   .reduce((sum, p) => sum + p.amount, 0);
                 const isExpanded = expandedDate === date;
                 return (
-                  <div key={date} className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
+                  <div key={`d-${date}`} className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
@@ -550,16 +550,16 @@ export default function AdminPayments() {
                     </div>
                     {isExpanded && (
                       <div className="mt-5 space-y-4 pt-4 border-t border-slate-200/50">
-                        {Array.from(new Set(dayMatches.map(m => m.referee_id))).map(refId => {
+                        {Array.from(new Set(dayMatches.map(m => m.referee_id))).map((refId, idx) => {
                           const ref = referees.find(r => r.id === refId);
                           const refMatches = dayMatches.filter(m => m.referee_id === refId);
                           return (
-                            <div key={refId} className="space-y-3">
+                            <div key={`ref-${refId || 'no-id'}-${idx}`} className="space-y-3">
                               <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest flex items-center">
                                 <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full mr-2"></span>
                                 {ref?.name || 'Sin Asignar'}
                               </p>
-                              {refMatches.map(m => {
+                              {refMatches.map((m, mIdx) => {
                                 const teamA = teams.find((t: any) => t.id === m.team_a_id)?.name || 'Desconocido';
                                 const teamB = teams.find((t: any) => t.id === m.team_b_id)?.name || 'Desconocido';
                                 const paymentA = uniquePayments.find(p => p.match_id === m.id && p.team_id === m.team_a_id);
@@ -573,7 +573,7 @@ export default function AdminPayments() {
                                 };
 
                                 return (
-                                  <div key={m.id} className="flex justify-between items-center p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
+                                  <div key={`m-${m.id || 'no-id'}-${mIdx}`} className="flex justify-between items-center p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
                                     <div className="flex flex-col">
                                       <div className="flex items-center gap-2">
                                         <span className="text-[10px] font-black text-slate-900 border-r border-slate-100 pr-2 leading-none">{m.match_time}</span>
@@ -616,7 +616,7 @@ export default function AdminPayments() {
           </button>
           {isResumenOpen && (
             <div className="p-6 pt-0 border-t border-slate-50 space-y-4">
-              {[...referees].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())).map(ref => {
+              {[...referees].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())).map((ref, idx) => {
                 const refMatches = filteredMatches.filter(m => m.referee_id === ref.id);
                 const liquidatedMatches = refMatches.filter(m => m.status === 'Liquidado');
                 const totalAmount = uniquePayments
@@ -630,7 +630,7 @@ export default function AdminPayments() {
                 const isTotalLiquidation = hasLiquidatedMatches && refMatches.every(m => m.status === 'Liquidado');
                 
                 return (
-                  <div key={ref.id} className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
+                  <div key={`summary-${ref.id || 'no-id'}-${idx}`} className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center">
                         <div className="relative">
@@ -681,13 +681,13 @@ export default function AdminPayments() {
                         {Array.from(new Set(refMatches.map(m => m.match_date))).sort().map(date => {
                           const dateMatches = refMatches.filter(m => m.match_date === date).sort((a, b) => a.match_time.localeCompare(b.match_time));
                           return (
-                            <div key={date} className="bg-white p-4 rounded-[1.5rem] border border-slate-100 shadow-sm">
+                            <div key={`mdate-${date}`} className="bg-white p-4 rounded-[1.5rem] border border-slate-100 shadow-sm">
                               <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest mb-3 flex items-center gap-2">
                                 <Calendar className="w-3.5 h-3.5 text-indigo-500" />
                                 {format(new Date(date as string), 'dd/MM/yyyy EEEE', { locale: es })}
                               </p>
                               <div className="space-y-2">
-                                  {dateMatches.map(m => {
+                                  {dateMatches.map((m, mDateIndex) => {
                                     const teamA = teams.find((t: any) => t.id === m.team_a_id)?.name || 'Desconocido';
                                     const teamB = teams.find((t: any) => t.id === m.team_b_id)?.name || 'Desconocido';
                                     const paymentA = uniquePayments.find(p => p.match_id === m.id && p.team_id === m.team_a_id);
@@ -701,7 +701,7 @@ export default function AdminPayments() {
                                     };
 
                                     return (
-                                      <div key={m.id} className="flex justify-between items-center p-2.5 bg-slate-50/50 rounded-xl border border-slate-100 text-[11px] font-bold">
+                                      <div key={`mdate-${m.id || 'no-id'}-${mDateIndex}`} className="flex justify-between items-center p-2.5 bg-slate-50/50 rounded-xl border border-slate-100 text-[11px] font-bold">
                                         <div className="text-slate-700 flex items-center gap-2">
                                           <span className="text-[10px] font-black">{m.match_time}</span>
                                           <span className={getTeamColor(paymentA)}>{teamA}</span>

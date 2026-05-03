@@ -18,6 +18,7 @@ export interface Referee extends User {
     nivel: 1 | 2 | 3;
     camposVetados: string[];
     equiposVetados: string[];
+    partner_referee_id?: string;
   };
   disponibilidad?: Record<string, string[]>; // Ejemplo: { "Lunes": ["20:30", "21:30"] }
 }
@@ -125,6 +126,7 @@ export interface AccountingTransaction {
 export interface VenueRentalCost {
   venue_name: string;
   hourly_rate: number;
+  is_double?: boolean;
 }
 
 export interface EconomicSettings {

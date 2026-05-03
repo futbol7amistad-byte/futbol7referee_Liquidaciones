@@ -10,6 +10,7 @@ export interface AssignmentSession {
   weeklySlots?: Record<string, Record<string, number>>; // refereeId -> { Lunes: 2, Martes: 0, etc }
   mandatoryDays?: Record<string, string[]>; // refereeId -> ['Lunes', 'Miércoles']
   forceReassignAll?: boolean;
+  venueCosts?: any[]; // Para instalaciones múltiples
 }
 
 export interface AssignmentResult {

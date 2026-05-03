@@ -151,7 +151,7 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
   const [isProcessing, setIsProcessing] = useState(false);
   
   const [dateRange, setDateRange] = useState({
-    start: format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'),
+    start: format(new Date(new Date().getFullYear() - (new Date().getMonth() < 8 ? 1 : 0), 8, 10), 'yyyy-MM-dd'),
     end: format(new Date(), 'yyyy-MM-dd')
   });
   const [sortBy, setSortBy] = useState<'date' | 'account'>('date');
@@ -480,12 +480,12 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
             </tr>
           </thead>
           <tbody className="space-y-2 print:space-y-0 before:content-[''] before:block before:h-2 print:before:hidden">
-            {filteredTransactions.map((t: any) => {
+            {filteredTransactions.map((t: any, index: number) => {
               const account = safeAccounts.find((a: any) => a.id === t.accountId);
               const isIngreso = t.type === 'Ingreso';
               return (
                 <tr 
-                  key={t.id} 
+                  key={`econ-tx-${t.id}-${index}`} 
                   className={`
                     group transition-all duration-200 border-l-[3px] shadow-sm print:shadow-none print:border-l-0 print:border-b print:border-black/20
                     ${isIngreso 
@@ -645,8 +645,8 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
                   required
                 >
                   <option value="">Seleccionar cuenta...</option>
-                  {safeAccounts.filter((a:any) => a.type === formData.type).sort((a: any, b: any) => (a.code || '').localeCompare(b.code || '')).map((a: any) => (
-                    <option key={a.id} value={a.id}>{a.code} - {a.name}</option>
+                  {safeAccounts.filter((a:any) => a.type === formData.type).sort((a: any, b: any) => (a.code || '').localeCompare(b.code || '')).map((a: any, aIdx: number) => (
+                    <option key={`ae-acc-${a.id || 'no-id'}-${aIdx}`} value={a.id}>{a.code} - {a.name}</option>
                   ))}
                 </select>
               </div>
@@ -739,8 +739,8 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-amber-500/20 outline-none"
                 >
                   <option value="">Elegir periodo...</option>
-                  {uniquePeriods.map(p => (
-                    <option key={p} value={p}>{formatPeriodRange(p)}</option>
+                  {uniquePeriods.map((p, pIdx) => (
+                    <option key={`ae-per-${pIdx}`} value={p}>{formatPeriodRange(p)}</option>
                   ))}
                 </select>
               </div>
@@ -857,7 +857,7 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
 function SummaryTab({ transactions, accounts }: any) {
   const { economicSettings, addTransaction } = useData();
   const [dateRange, setDateRange] = useState({
-    start: format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'),
+    start: format(new Date(new Date().getFullYear() - (new Date().getMonth() < 8 ? 1 : 0), 8, 10), 'yyyy-MM-dd'),
     end: format(new Date(), 'yyyy-MM-dd')
   });
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
@@ -1066,13 +1066,13 @@ function SummaryTab({ transactions, accounts }: any) {
           <div className="space-y-4">
               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Mayores Auxiliares (Ingresos)</h4>
               <div className="bg-slate-50/50 rounded-2xl p-2 space-y-1">
-                  {safeAccounts.filter((a: any) => a.type === 'Ingreso').map((acc: any) => {
+                  {safeAccounts.filter((a: any) => a.type === 'Ingreso').map((acc: any, aIdx: number) => {
                       const amount = filteredTransactions.filter((t: any) => t.accountId === acc.id).reduce((sum: number, t: any) => sum + t.amount, 0);
                       const percent = totalIncome > 0 ? (amount / totalIncome) * 100 : 0;
                       if (amount === 0) return null;
                       return (
                           <div 
-                            key={acc.id} 
+                            key={`ae-acc-in-${acc.id || 'no-id'}-${aIdx}`} 
                             onClick={() => setSelectedAccountId(acc.id)}
                             className={`p-3 rounded-xl border transition-all cursor-pointer ${
                               selectedAccountId === acc.id 
@@ -1100,13 +1100,13 @@ function SummaryTab({ transactions, accounts }: any) {
           <div className="space-y-4">
                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Mayores Auxiliares (Gastos)</h4>
                <div className="bg-slate-50/50 rounded-2xl p-2 space-y-1">
-                  {safeAccounts.filter((a: any) => a.type === 'Gasto').map((acc: any) => {
+                  {safeAccounts.filter((a: any) => a.type === 'Gasto').map((acc: any, aIdx: number) => {
                       const amount = filteredTransactions.filter((t: any) => t.accountId === acc.id).reduce((sum: number, t: any) => sum + t.amount, 0);
                       const percent = totalExpense > 0 ? (amount / totalExpense) * 100 : 0;
                       if (amount === 0) return null;
                       return (
                           <div 
-                            key={acc.id} 
+                            key={`ae-acc-out-${acc.id || 'no-id'}-${aIdx}`} 
                             onClick={() => setSelectedAccountId(acc.id)}
                             className={`p-3 rounded-xl border transition-all cursor-pointer ${
                               selectedAccountId === acc.id 
@@ -1173,8 +1173,8 @@ function SummaryTab({ transactions, accounts }: any) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 print:divide-slate-200">
-                {accountTransactions.map((t: any) => (
-                  <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
+                {accountTransactions.map((t: any, idx: number) => (
+                  <tr key={`econ-tx2-${t.id}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-4 py-3 print:px-2 print:py-1.5 text-xs print:text-[10px] font-bold text-slate-500 print:text-black tabular-nums">
                       {format(parseISO(t.date), 'dd/MM/yyyy')}
                     </td>
@@ -1433,11 +1433,11 @@ function TeamsEconomicTab({ teams, status, settings, updateStatus, addTransactio
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {[...filteredTeams].sort((a,b) => a.name.localeCompare(b.name)).map((team: any) => {
+            {[...filteredTeams].sort((a,b) => a.name.localeCompare(b.name)).map((team: any, tIdx: number) => {
               const teamStatus = status.find((s: any) => s.team_id === team.id) || { registration_paid: false, licenses_count_type1: 0, licenses_count_type2: 0, licenses_count_type3: 0 };
               return (
                 <TeamEconomicRow
-                  key={team.id}
+                  key={`ae-ttr-${team.id || 'no-id'}-${tIdx}`}
                   team={team}
                   status={teamStatus}
                   settings={settings}
@@ -1480,12 +1480,12 @@ function TeamsEconomicTab({ teams, status, settings, updateStatus, addTransactio
               </p>
               
               <div className="space-y-3">
-                {pendingTeamsList.map((team: any) => {
+                {pendingTeamsList.map((team: any, index: number) => {
                   const urlMsg = `Hola responsable del equipo ${team.name}. Te recordamos que la cuota de inscripción de la liga, por importe de ${settings.registration_fee || 0}€, está pendiente de abono. ¡Por favor, regulariza la situación lo antes posible!`;
                   const whLink = team.contact_phone ? getWhatsAppLink(team.contact_phone, urlMsg) : '#';
 
                   return (
-                    <div key={team.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-white">
+                    <div key={`econ-tm-${team.id}-${index}`} className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-white">
                       <div>
                          <div className="text-sm font-black text-slate-900">{team.name}</div>
                          <div className="text-xs font-bold text-slate-500 mt-1">Tel: {team.contact_phone || 'Sin número registrado'}</div>
@@ -1686,7 +1686,7 @@ function TeamEconomicRow({ team, status, settings, accounts, updateStatus, addTr
   };
 
   return (
-    <tr key={team.id} className="hover:bg-slate-50 transition-colors">
+    <tr key={`econ-tr-${team.id}`} className="hover:bg-slate-50 transition-colors">
       <td className="px-4 py-4">
         <span className="text-sm font-black text-slate-900 block">{team.name}</span>
         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ID: {team.id.slice(0,8)}</span>
@@ -2014,8 +2014,8 @@ function AccountsTab({ accounts, addAccount, updateAccount, deleteAccount }: any
               {[...(accounts || [])]
                 .filter((a: any) => a?.type === 'Ingreso')
                 .sort((a: any, b: any) => String(a?.code || '').localeCompare(String(b?.code || '')))
-                .map((acc: any) => (
-                <tr key={acc.id} className="hover:bg-emerald-50/30 transition-colors flex w-full items-center">
+                .map((acc: any, aIdx: number) => (
+                <tr key={`ae-list-acc-in-${acc.id || 'no-id'}-${aIdx}`} className="hover:bg-emerald-50/30 transition-colors flex w-full items-center">
                   <td className="px-4 py-3 text-xs font-black text-emerald-900 w-1/4">{acc.code}</td>
                   <td className="px-4 py-3 w-full flex-1">
                      <span className="text-xs font-bold text-slate-700 block">{acc.name}</span>
@@ -2068,8 +2068,8 @@ function AccountsTab({ accounts, addAccount, updateAccount, deleteAccount }: any
               {[...(accounts || [])]
                 .filter((a: any) => a?.type === 'Gasto')
                 .sort((a: any, b: any) => String(a?.code || '').localeCompare(String(b?.code || '')))
-                .map((acc: any) => (
-                <tr key={acc.id} className="hover:bg-rose-50/30 transition-colors flex w-full items-center">
+                .map((acc: any, aIdx: number) => (
+                <tr key={`ae-list-acc-out-${acc.id || 'no-id'}-${aIdx}`} className="hover:bg-rose-50/30 transition-colors flex w-full items-center">
                   <td className="px-4 py-3 text-xs font-black text-rose-900 w-1/4">{acc.code}</td>
                   <td className="px-4 py-3 w-full flex-1">
                      <span className="text-xs font-bold text-slate-700 block">{acc.name}</span>
@@ -2191,6 +2191,16 @@ function ConfigEconomicTab({ settings, updateSettings }: any) {
         return prev.map(v => v.venue_name === venue ? { ...v, hourly_rate: rate } : v);
       }
       return [...prev, { venue_name: venue, hourly_rate: rate }];
+    });
+  };
+
+  const handleUpdateVenueDouble = (venue: string, is_double: boolean) => {
+    setVenueCosts(prev => {
+      const existing = prev.find(v => v.venue_name === venue);
+      if (existing) {
+        return prev.map(v => v.venue_name === venue ? { ...v, is_double } : v);
+      }
+      return [...prev, { venue_name: venue, hourly_rate: 0, is_double }];
     });
   };
 
@@ -2471,13 +2481,26 @@ function ConfigEconomicTab({ settings, updateSettings }: any) {
               ) : (
                 <div className="space-y-3">
                   {venuesFromMatches.map(venue => {
-                    const currentRate = venueCosts.find(v => v.venue_name === venue)?.hourly_rate || 0;
+                    const venueConfig = venueCosts.find(v => v.venue_name === venue);
+                    const currentRate = venueConfig?.hourly_rate || 0;
+                    const isDouble = venueConfig?.is_double || false;
                     return (
-                      <div key={venue} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-2xl">
+                      <div key={venue} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-3 bg-slate-50 border border-slate-100 rounded-2xl">
                         <div className="flex-grow pr-4">
                           <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{venue}</p>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4">
+                          <label className="flex items-center gap-2 cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              checked={isDouble}
+                              onChange={(e) => handleUpdateVenueDouble(venue, e.target.checked)}
+                              className="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500/20"
+                            />
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight group-hover:text-slate-700 transition-colors">
+                              Múltiples Campos
+                            </span>
+                          </label>
                           <div className="relative">
                             <input 
                               type="number"
@@ -2958,7 +2981,7 @@ function BudgetTab({ accounts, teams, settings, updateSettings }: any) {
           
           <div className="space-y-3">
             {safeAccounts.filter((a: any) => a.type === 'Ingreso').sort((a: any, b: any) => (a.code||'').localeCompare(b.code||'')).map((acc: any) => (
-              <div key={acc.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 gap-4">
+              <div key={`budget-in-${acc.id}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 gap-4">
                 <span className="text-xs font-bold text-slate-700">{acc.code} - {acc.name}</span>
                 <div className="flex-1 border-b-2 border-dotted border-slate-200 mt-1.5"></div>
                 <div className="relative w-32 shrink-0">
@@ -2993,7 +3016,7 @@ function BudgetTab({ accounts, teams, settings, updateSettings }: any) {
           
           <div className="space-y-3">
             {safeAccounts.filter((a: any) => a.type === 'Gasto').sort((a: any, b: any) => (a.code||'').localeCompare(b.code||'')).map((acc: any) => (
-              <div key={acc.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 gap-4">
+              <div key={`budget-out-${acc.id}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 gap-4">
                 <span className="text-xs font-bold text-slate-700">{acc.code} - {acc.name}</span>
                 <div className="flex-1 border-b-2 border-dotted border-slate-200 mt-1.5"></div>
                 <div className="relative w-32 shrink-0">

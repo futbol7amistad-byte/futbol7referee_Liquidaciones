@@ -134,7 +134,7 @@ export default function AdminTeams() {
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {filteredTeams.map((team, index) => (
-                          <tr key={team.id} className="hover:bg-slate-50/20 transition-all">
+                          <tr key={`team-row-${team.id}-${index}`} className="hover:bg-slate-50/20 transition-all">
                             <td className="px-6 py-5 whitespace-nowrap text-xs font-black text-slate-300">{(index + 1).toString().padStart(2, '0')}</td>
                             <td className="px-6 py-5 whitespace-nowrap text-sm font-black text-slate-900 uppercase tracking-tight">{team.name}</td>
                             <td className="px-6 py-5 whitespace-nowrap text-center">
@@ -205,10 +205,10 @@ export default function AdminTeams() {
                   className="overflow-hidden"
                 >
                   <div className="p-8 pt-0 grid grid-cols-1 gap-4">
-                    {sanctions.map((sanction) => {
+                    {sanctions.map((sanction, sIdx) => {
                       const team = teams.find(t => t.id === sanction.team_id);
                       return (
-                        <div key={sanction.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-6 bg-slate-50/50 rounded-3xl border border-slate-100 group transition-all hover:bg-white hover:shadow-app hover:border-white">
+                        <div key={`sanc-${sanction.id || 'no-id'}-${sIdx}`} className="flex flex-col sm:flex-row sm:items-center justify-between p-6 bg-slate-50/50 rounded-3xl border border-slate-100 group transition-all hover:bg-white hover:shadow-app hover:border-white">
                           <div className="flex items-center gap-4 mb-4 sm:mb-0">
                             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-lg font-black shadow-sm ${sanction.is_paid ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
                               {sanction.amount} <span className="text-[10px] ml-0.5">€</span>

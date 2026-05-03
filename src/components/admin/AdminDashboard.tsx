@@ -149,7 +149,7 @@ export default function AdminDashboard() {
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {stats.map((stat, index) => (
-          <div key={index} className="group bg-white rounded-[2rem] p-6 shadow-app border border-white hover:border-slate-200 transition-all hover:shadow-app-lg relative overflow-hidden active:scale-[0.99]">
+          <div key={`stat-${stat.title.replace(/\s+/g, '-')}-${index}`} className="group bg-white rounded-[2rem] p-6 shadow-app border border-white hover:border-slate-200 transition-all hover:shadow-app-lg relative overflow-hidden active:scale-[0.99]">
              <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full -mr-16 -mt-16 group-hover:scale-110 transition-transform duration-500 opacity-50"></div>
             
             <div className="flex items-start justify-between relative z-10">

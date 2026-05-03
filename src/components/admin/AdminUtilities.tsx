@@ -384,8 +384,8 @@ export default function AdminUtilities() {
             onChange={e => setCloneSourceId(e.target.value)}
           >
             <option value="">Nueva Competición Vacía</option>
-            {competitions.map(c => (
-              <option key={c.id} value={c.id}>Clonar: {c.name}</option>
+            {competitions.map((c, idx) => (
+              <option key={`clone-${c.id || 'no-id'}-${idx}`} value={c.id}>Clonar: {c.name}</option>
             ))}
           </select>
           <button
@@ -408,7 +408,7 @@ export default function AdminUtilities() {
 
       {/* Competitions Tree */}
       <div className="space-y-4">
-        {competitions.map((comp) => {
+        {competitions.map((comp, compIdx) => {
           
           let compMatches = 0;
           let compHours = 0;
@@ -441,7 +441,7 @@ export default function AdminUtilities() {
           const CompIcon = ICONS[comp.iconType];
 
           return (
-            <div key={comp.id} className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
+            <div key={`comp-main-${comp.id || 'no-id'}-${compIdx}`} className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
               <div 
                 className="bg-slate-50 border-b border-slate-100 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:bg-slate-100 transition-colors"
               >
@@ -514,10 +514,10 @@ export default function AdminUtilities() {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {comp.categories.map(cat => {
+                        {comp.categories.map((cat, catIdx) => {
                           const isCatExpanded = expandedCats[cat.id];
                           return (
-                            <div key={cat.id} className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                            <div key={`cat-sub-${cat.id || 'no-id'}-${catIdx}`} className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                               <div className="bg-slate-50 p-3 flex items-center justify-between border-b border-slate-200">
                                 <div className="flex items-center gap-3">
                                   <button onClick={() => toggleCat(cat.id)} className="p-1 text-slate-400 hover:text-slate-600">
@@ -561,8 +561,8 @@ export default function AdminUtilities() {
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-50">
-                                          {cat.divisions.map(div => (
-                                            <React.Fragment key={div.id}>
+                                          {cat.divisions.map((div: any, divIdx: number) => (
+                                            <React.Fragment key={`div-${div.id || 'no-id'}-${divIdx}`}>
                                               <tr className="hover:bg-slate-50 transition-colors">
                                                 <td className="p-2">
                                                   <input 

@@ -69,8 +69,8 @@ export default function AdminReferees() {
                 onChange={(e) => setSelectedRefereeId(e.target.value)}
               >
                 <option value="">TODOS LOS ÁRBITROS</option>
-                {[...referees].sort((a,b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())).map(ref => (
-                  <option key={ref.id} value={ref.id}>{ref.name.toUpperCase()}</option>
+                {[...referees].sort((a,b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())).map((ref, idx) => (
+                  <option key={`opt-ref-${ref.id || 'no-id'}-${idx}`} value={ref.id}>{ref.name.toUpperCase()}</option>
                 ))}
               </select>
               <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
@@ -91,8 +91,8 @@ export default function AdminReferees() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {filteredReferees.map((referee) => (
-                  <tr key={referee.id} className="hover:bg-slate-50/30 transition-all group">
+                {filteredReferees.map((referee, idx) => (
+                  <tr key={`list-ref-${referee.id || 'no-id'}-${idx}`} className="hover:bg-slate-50/30 transition-all group">
                     <td className="px-6 py-5 whitespace-nowrap">
                       <div className="relative inline-block">
                         {referee.photo_url ? (
@@ -141,7 +141,7 @@ export default function AdminReferees() {
                         </div>
                     </td>
                     <td className="px-6 py-5 whitespace-nowrap text-center">
-                      {(referee.preferences?.camposVetados?.length > 0 || referee.preferences?.equiposVetados?.length > 0) ? (
+                      {(referee.preferences?.camposVetados?.length > 0 || referee.preferences?.equiposVetados?.length > 0 || referee.preferences?.partner_referee_id) ? (
                         <div className="relative flex justify-center group/tooltip">
                           <button type="button" className="p-2 text-rose-500 bg-rose-50 rounded-full border border-rose-100 shadow-sm cursor-help">
                             <ShieldAlert className="w-5 h-5" />
@@ -153,20 +153,28 @@ export default function AdminReferees() {
                                 <span className="font-bold text-rose-400 block mb-1">Campos Vetados:</span>
                                 <ul className="list-disc pl-4 space-y-0.5 text-[10px] text-slate-200">
                                   {referee.preferences.camposVetados.map((campo, i) => (
-                                    <li key={`cv-${i}`}>{campo}</li>
+                                    <li key={`cv-${referee.id}-${i}`}>{campo}</li>
                                   ))}
                                 </ul>
                               </div>
                             )}
                             {referee.preferences?.equiposVetados?.length > 0 && (
-                              <div>
+                              <div className="mb-2">
                                 <span className="font-bold text-rose-400 block mb-1">Equipos Vetados:</span>
                                 <ul className="list-disc pl-4 space-y-0.5 text-[10px] text-slate-200 whitespace-normal">
                                   {referee.preferences.equiposVetados.map((teamId, i) => {
                                     const team = teams.find(t => t.id === teamId);
-                                    return <li key={`tv-${i}`} className="break-words">{team ? team.name : teamId}</li>;
+                                    return <li key={`tv-${referee.id}-${i}`} className="break-words">{team ? team.name : teamId}</li>;
                                   })}
                                 </ul>
+                              </div>
+                            )}
+                            {referee.preferences?.partner_referee_id && (
+                              <div>
+                                <span className="font-bold text-amber-400 block mb-1">Compañero Vinculado:</span>
+                                <div className="text-[10px] text-slate-200">
+                                  {referees.find(r => r.id === referee.preferences?.partner_referee_id)?.name || 'Desconocido'}
+                                </div>
                               </div>
                             )}
                             <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-slate-900 rotate-45 border-r border-b border-slate-700/50"></div>
@@ -249,7 +257,7 @@ function RefereeModal({ referee, onClose, onSave }: { referee: Referee | null, o
     disponibilidad: referee?.disponibilidad || { Lunes: [], Martes: [], Miercoles: [], Jueves: [] }
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { teams, matches } = useData(); // Necesitamos los equipos y partidos
+  const { teams, matches, referees } = useData(); // Necesitamos los equipos y partidos
   const campos = [...new Set(matches.map(m => m.field).filter(Boolean))].sort();
 
   const generatePassword = () => {
@@ -374,8 +382,8 @@ function RefereeModal({ referee, onClose, onSave }: { referee: Referee | null, o
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Campos Vetados</label>
                 <div className="h-24 overflow-y-auto bg-white p-3 rounded-xl border border-slate-200 text-[10px]">
-                  {campos.map(campo => (
-                    <label key={campo} className="flex items-center gap-2 mb-1">
+                  {campos.map((campo, idx) => (
+                    <label key={`opt-camp-${idx}`} className="flex items-center gap-2 mb-1">
                       <input type="checkbox" checked={formData.preferences.camposVetados?.includes(campo)} onChange={(e) => {
                           const newer = e.target.checked 
                             ? [...(formData.preferences.camposVetados || []), campo] 
@@ -393,10 +401,10 @@ function RefereeModal({ referee, onClose, onSave }: { referee: Referee | null, o
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Equipos Vetados</label>
                 <div className="h-24 overflow-y-auto bg-white p-3 rounded-xl border border-slate-200 text-[10px]">
-                  {[...teams].sort((a,b) => a.name.localeCompare(b.name)).map(t => (
-                    <label key={t.id} className="flex items-center gap-2 mb-1">
-                      <input type="checkbox" checked={formData.preferences.equiposVetados.includes(t.id)} onChange={(e) => {
-                          const newer = e.target.checked ? [...formData.preferences.equiposVetados, t.id] : formData.preferences.equiposVetados.filter(id => id !== t.id);
+                  {[...teams].sort((a,b) => a.name.localeCompare(b.name)).map((t, idx) => (
+                    <label key={`opt-team-${t.id || 'no-id'}-${idx}`} className="flex items-center gap-2 mb-1">
+                      <input type="checkbox" checked={formData.preferences?.equiposVetados?.includes(t.id)} onChange={(e) => {
+                          const newer = e.target.checked ? [...(formData.preferences.equiposVetados || []), t.id] : (formData.preferences.equiposVetados || []).filter(id => id !== t.id);
                           setFormData({...formData, preferences: {...formData.preferences, equiposVetados: newer}});
                         }}
                       />
@@ -404,6 +412,23 @@ function RefereeModal({ referee, onClose, onSave }: { referee: Referee | null, o
                     </label>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Compañero (Instalación Múltiple)</label>
+                <div className="bg-white rounded-xl border border-slate-200 p-1">
+                  <select
+                    className="w-full text-xs p-2 outline-none bg-transparent"
+                    value={formData.preferences?.partner_referee_id || ''}
+                    onChange={(e) => setFormData({...formData, preferences: {...formData.preferences, partner_referee_id: e.target.value}})}
+                  >
+                    <option value="">Sin Asignar</option>
+                    {[...referees].filter(r => r.id !== referee?.id).sort((a,b) => a.name.localeCompare(b.name)).map(r => (
+                      <option key={`partner-${r.id}`} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-[9px] text-slate-400 mt-1 ml-1 font-medium leading-tight">Mismo campo doble el mismo día.</p>
               </div>
 
               {/* Disponibilidad */}

@@ -1,21 +1,95 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useData } from '../../store/DataContext';
-import { Settings, Sun, Moon, Upload, Trash2, CheckCircle2, RefreshCw, HardDriveDownload, CalendarClock } from 'lucide-react';
+import { useSeason } from '../../contexts/SeasonContext';
+import { db } from '../../lib/firebase';
+import { doc, writeBatch, collection, setDoc } from 'firebase/firestore';
+import { Settings, Sun, Moon, Upload, Trash2, CheckCircle2, RefreshCw, HardDriveDownload, CalendarClock, UploadCloud, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { fileToBase64 } from '../../utils/imageUtils';
 
 export default function AdminSettings() {
   const data = useData();
+  const { currentSeason } = useSeason();
   const { settings, updateSettings } = data;
   const [season, setSeason] = useState(settings.season);
   const [backupFreq, setBackupFreq] = useState(settings.backup_frequency || 'none');
   const [showSaved, setShowSaved] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRefRestore = useRef<HTMLInputElement>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreLog, setRestoreLog] = useState('');
 
   useEffect(() => {
     setSeason(settings.season);
     setBackupFreq(settings.backup_frequency || 'none');
   }, [settings]);
+
+  const handleRestoreBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentSeason) return;
+
+    if (!window.confirm("ATENCIÓN: Esto SOBREESCRIBIRÁ todos los datos actuales de esta temporada con los del archivo de copia de seguridad. Asegúrate de que sea la temporada correcta. ¿Deseas continuar?")) {
+      if (fileInputRefRestore.current) fileInputRefRestore.current.value = '';
+      return;
+    }
+
+    setRestoring(true);
+    setRestoreLog('Leyendo archivo de copia de seguridad...');
+    
+    try {
+      const text = await file.text();
+      const backup = JSON.parse(text);
+
+      if (!backup.data || !backup.timestamp) {
+        throw new Error("El archivo no tiene el formato de copia de seguridad válido de nuestro sistema.");
+      }
+
+      setRestoreLog('Restaurando datos...');
+      
+      const collectionsMap: Record<string, any[]> = {
+        'matches': backup.data.matches || [],
+        'payments': backup.data.payments || [],
+        'referees': backup.data.referees || [],
+        'teams': backup.data.teams || [],
+        'deliveries': backup.data.deliveries || [],
+        'sanctions': backup.data.sanctions || [],
+        'referee_advances': backup.data.referee_advances || backup.data.refereeAdvances || [],
+        'accounting_accounts': backup.data.accounts || [],
+        'accounting_transactions': backup.data.transactions || [],
+        'team_economic_status': backup.data.teamEconomicStatus || []
+      };
+
+      let count = 0;
+      for (const [colName, items] of Object.entries(collectionsMap)) {
+        setRestoreLog(`Restaurando ${colName} (${items.length} items)...`);
+        for (const item of items) {
+           const id = item.id || item.team_id; 
+           if(id) {
+             const dataToSave = { ...item };
+             delete dataToSave.id;
+             await setDoc(doc(db, 'seasons', currentSeason.id, colName, id), dataToSave);
+             count++;
+           }
+        }
+      }
+
+      if (backup.data.settings) {
+         setRestoreLog('Restaurando configuración general...');
+         await setDoc(doc(db, 'seasons', currentSeason.id, 'settings', 'app_settings'), backup.data.settings);
+      }
+      if (backup.data.economicSettings) {
+         setRestoreLog('Restaurando configuración económica...');
+         await setDoc(doc(db, 'seasons', currentSeason.id, 'economic_settings', 'config'), backup.data.economicSettings);
+      }
+
+      setRestoreLog(`¡Éxito! ${count} registros restaurados. Recargando...`);
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err: any) {
+      console.error(err);
+      setRestoreLog(`Error: ${err.message}`);
+      setRestoring(false);
+    }
+  };
 
   const handleSaveSeason = () => {
     updateSettings({ season });
@@ -116,14 +190,46 @@ export default function AdminSettings() {
             <p className="text-sm text-gray-600 bg-gray-50 p-4 rounded-xl border border-gray-100 italic">
               Se exportarán todas las configuraciones, categorías, partidos, asignaciones, árbitros y datos económicos de la temporada actual.
             </p>
-            <button
-              onClick={handleDownloadBackup}
-              className="w-full flex justify-center items-center px-6 py-4 bg-emerald-600 text-white rounded-xl font-bold shadow-md shadow-emerald-600/20 hover:bg-emerald-700 transition-all"
-            >
-              <HardDriveDownload className="w-5 h-5 mr-3" />
-              Descargar Copia de Seguridad Completa (.json)
-            </button>
-            {settings.last_backup_date && (
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={handleDownloadBackup}
+                disabled={restoring}
+                className="flex-1 flex justify-center items-center px-4 py-3 bg-emerald-600 text-white rounded-xl font-bold shadow-md shadow-emerald-600/20 hover:bg-emerald-700 transition-all disabled:opacity-50"
+              >
+                <HardDriveDownload className="w-5 h-5 mr-2" />
+                Guardar Copia
+              </button>
+              
+              <button
+                onClick={() => fileInputRefRestore.current?.click()}
+                disabled={restoring}
+                className="flex-1 flex justify-center items-center px-4 py-3 bg-red-600 text-white rounded-xl font-bold shadow-md shadow-red-600/20 hover:bg-red-700 transition-all disabled:opacity-50"
+              >
+                <UploadCloud className="w-5 h-5 mr-2" />
+                Restaurar
+              </button>
+              <input
+                ref={fileInputRefRestore}
+                type="file"
+                className="hidden"
+                accept=".json"
+                onChange={handleRestoreBackup}
+              />
+            </div>
+            
+            <AnimatePresence>
+              {restoring && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-mono text-red-700">
+                  <div className="flex items-center mb-1">
+                    <AlertTriangle className="w-4 h-4 mr-2" />
+                    <strong>No cierres la página...</strong>
+                  </div>
+                  {restoreLog}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {settings.last_backup_date && !restoring && (
                <p className="text-xs font-bold text-emerald-700 text-center">
                  Última copia realizada: {new Date(settings.last_backup_date).toLocaleString()}
                </p>

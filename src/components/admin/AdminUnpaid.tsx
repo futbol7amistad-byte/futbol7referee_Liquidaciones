@@ -19,13 +19,13 @@ export default function AdminUnpaid() {
       ) : (
         <div className="bg-white shadow overflow-hidden sm:rounded-lg">
           <ul className="divide-y divide-gray-200">
-            {unpaidPayments.map(payment => {
+            {unpaidPayments.map((payment, idx) => {
               const team = teams.find(t => t.id === payment.team_id);
               const match = matches.find(m => m.id === payment.match_id);
               const referee = referees.find(r => r.id === match?.referee_id);
 
               return (
-                <li key={payment.id} className="p-4 sm:px-6 hover:bg-gray-50">
+                <li key={`unp-${payment.id || 'no-id'}-${idx}`} className="p-4 sm:px-6 hover:bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <AlertCircle className="h-5 w-5 text-red-500 mr-3" />

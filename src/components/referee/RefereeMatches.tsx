@@ -117,8 +117,8 @@ export default function RefereeMatches() {
             onChange={(e) => setSelectedRound(e.target.value)}
             className="w-full bg-white border border-indigo-100 rounded-2xl px-5 py-4 text-sm font-bold text-slate-900 appearance-none focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
           >
-            {periods.map(p => (
-              <option key={p.id} value={p.id}>{p.label}</option>
+            {periods.map((p, idx) => (
+              <option key={`rm-per-${p.id || 'no-id'}-${idx}`} value={p.id}>{p.label}</option>
             ))}
           </select>
           <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400 pointer-events-none" />
@@ -156,9 +156,9 @@ export default function RefereeMatches() {
                     exit={{ height: 0, opacity: 0 }}
                     className="space-y-5 px-1 pt-2 overflow-hidden"
                   >
-                    {groupedMatches[date].map((match) => (
+                    {groupedMatches[date].map((match, mi) => (
                       <MatchCard 
-                        key={match.id}
+                        key={`${match.id || 'no-id'}-${mi}`}
                         match={match} 
                         getTeamName={getTeamName}
                         getPaymentStatus={getPaymentStatus}

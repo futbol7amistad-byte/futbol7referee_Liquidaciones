@@ -1,6 +1,6 @@
 // AutoAssigner.ts
 import { AssignmentSession, AssignmentResult } from "./types";
-import { isRefereeAvailable, normalizeString } from "./Constraints";
+import { isRefereeAvailable, normalizeString, getDayName } from "./Constraints";
 import { calculateScore } from "./Scorer";
 import { Match, Referee } from "../../types";
 
@@ -55,10 +55,12 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
     return totalSlots;
   };
 
-  const getRefereeMaxDailyLoad = (ref: Referee, day: string): number => {
-    const normDay = normalizeString(day);
-    // Para simplificar, buscamos en los días base
-    const baseDays = ['Lunes', 'Martes', 'Miercoles', 'Jueves'];
+  const getRefereeMaxDailyLoad = (ref: Referee, day: string, matchDate?: string): number => {
+    let normDay = normalizeString(day);
+    if (!normDay && matchDate) {
+        normDay = normalizeString(getDayName(matchDate));
+    }
+    const baseDays = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado', 'Domingo'];
     const ogDay = baseDays.find(d => normalizeString(d) === normDay) || day;
 
     if (session.weeklySlots && session.weeklySlots[ref.id] && session.weeklySlots[ref.id][ogDay] !== undefined) {
@@ -69,6 +71,37 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
     if (!dispKey || !ref.disponibilidad) return 0;
     const slots = ref.disponibilidad[dispKey];
     return Array.isArray(slots) ? slots.length : (slots ? 1 : 0);
+  };
+
+  const getPartnerBonus = (ref: Referee, matchesToAssign: Match[]): number => {
+      let bonus = 0;
+      if (!ref.preferences?.partner_referee_id) return bonus;
+      
+      matchesToAssign.forEach(m => {
+          const mFieldConfig = session.venueCosts?.find((v: any) => v.venue_name === m.field);
+          if (mFieldConfig?.is_double) {
+              // Buscar todos los partidos asignados ACTUALMENTE (en sesión y en results) para el compañero en ese día
+              const partnerId = ref.preferences!.partner_referee_id;
+              
+              const allAssigned = [
+                  ...session.matches.filter(sm => sm.referee_id === partnerId),
+                  ...results.map(r => ({ ...session.matches.find(sm => sm.id === r.matchId)!, referee_id: r.refereeId })).filter(r => r && r.referee_id === partnerId)
+              ];
+
+              const partnerMatchesSameDay = allAssigned.filter(pm => pm.match_date === m.match_date);
+              
+              for (const pm of partnerMatchesSameDay) {
+                  const pFieldConfig = session.venueCosts?.find((v: any) => v.venue_name === pm.field);
+                  if (pFieldConfig?.is_double && pm.field !== m.field) {
+                      bonus += 1000000; // Bono masivo
+                      if (pm.match_time === m.match_time) {
+                          bonus += 5000000; // Bono súper masivo por ser a la misma hora en la otra pista
+                      }
+                  }
+              }
+          }
+      });
+      return bonus;
   };
 
   // 1. Inicializar carga base considerando SOLO los partidos que caen en las fechas que estamos tratando
@@ -90,6 +123,8 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
         m.referee_id !== 'r-unassigned' && m.referee_id !== 'SIN ASIGNAR' &&
         (!minDate || (m.match_date >= minDate && m.match_date <= maxDate))) {
       refereeLoad[m.referee_id]++;
+      const mDayNorm = normalizeString(m.day_name || getDayName(m.match_date));
+      refereeDailyLoad[m.referee_id][mDayNorm] = (refereeDailyLoad[m.referee_id][mDayNorm] || 0) + 1;
     }
   });
 
@@ -132,8 +167,9 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
       // Check daily max load for ALL matches in the group
       let dailyLoadOk = true;
       for (const gm of groupMatches) {
-        const mDay = normalizeString(gm.day_name);
-        const maxDaily = getRefereeMaxDailyLoad(ref, gm.day_name || '');
+        const robustDayName = gm.day_name || getDayName(gm.match_date);
+        const mDay = normalizeString(robustDayName);
+        const maxDaily = getRefereeMaxDailyLoad(ref, robustDayName, gm.match_date);
         const currentDaily = (refereeDailyLoad[ref.id][mDay] || 0);
         if (currentDaily + 1 > maxDaily) { // Technically, a group might have multiple matches on the same day, so + 1 per match logic:
             dailyLoadOk = false;
@@ -144,25 +180,41 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
       // REGLA ESPECIAL: Si es un partido suelto (1 solo), priorizar a los que tienen horas impares o solo 1 hora restante
       // Pero NO penalizar excesivamente a los de 2 horas si no hay más opciones
       let specialBonus = 0;
-      const mDayNorm = normalizeString(groupMatches[0].day_name);
+      const mDayRobust = groupMatches[0].day_name || getDayName(groupMatches[0].match_date);
+      const mDayNorm = normalizeString(mDayRobust);
       if (session.mandatoryDays && session.mandatoryDays[ref.id] && session.mandatoryDays[ref.id].some(d => normalizeString(d) === mDayNorm)) {
           specialBonus += 5000000; // Mandatory day explicitly set
       }
 
       if (isSingleMatch) {
+          const maxDaily = getRefereeMaxDailyLoad(ref, mDayRobust, groupMatches[0].match_date);
+          const currentDaily = (refereeDailyLoad[ref.id][mDayNorm] || 0);
+          const remainingDaily = maxDaily - currentDaily;
+          
+          let hadExplicitSlot = false;
+          const ogDay = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado', 'Domingo']
+              .find(d => normalizeString(d) === normalizeString(mDayRobust)) || mDayRobust;
+          if (session.weeklySlots && session.weeklySlots[ref.id] && session.weeklySlots[ref.id][ogDay] !== undefined) {
+             hadExplicitSlot = true;
+          }
+
+          if (remainingDaily > 0 && remainingDaily % 2 !== 0) {
+              specialBonus += 500000000; // Prioridad absoluta a impares
+              if (hadExplicitSlot) {
+                  specialBonus += 900000000;
+              }
+              if (remainingDaily === 1) {
+                  specialBonus += 20000000; 
+              }
+          } else if (remainingDaily > 0 && remainingDaily % 2 === 0) {
+              // Si tiene horas pares disponibles en ESE DÍA (ej 2 horas), penalizamos duramente
+              specialBonus -= 100000000;
+          }
+
           // Si el árbitro tiene una carga MAXIMA impar (ej. 3 horas), NECESITA llevarse un partido suelto
           if (maxLoad % 2 !== 0) specialBonus += 1000000;
-
-          // Si al árbitro le queda solo 1 hora en total, es el candidato ideal
-          if (remainingLoad === 1) specialBonus += 500; // Mucho más bonus para asegurar el encaje
           
-          // Si estamos en la fase individual, cualquier disponibilidad es buena
           specialBonus += 100;
-          
-          const mDay = normalizeString(groupMatches[0].day_name);
-          const dispKey = Object.keys(ref.disponibilidad || {}).find(k => normalizeString(k) === mDay);
-          const daySlotsCount = dispKey ? (ref.disponibilidad![dispKey] || []).length : 0;
-          if (daySlotsCount === 1) specialBonus += 200;
       }
 
       // Debe estar disponible para TODOS los partidos del bloque
@@ -187,6 +239,7 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
         const loadPercentage = currentLoad / maxLoad;
         totalScore -= (loadPercentage * 100000);
         totalScore += specialBonus;
+        totalScore += getPartnerBonus(ref, groupMatches);
 
         if (totalScore > bestGroupScore) {
           bestGroupScore = totalScore;
@@ -227,8 +280,9 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
 
           if (remainingLoad < 1) continue;
 
-          const mDay = normalizeString(m.day_name);
-          const maxDaily = getRefereeMaxDailyLoad(ref, m.day_name || '');
+          const mDayRobust = m.day_name || getDayName(m.match_date);
+          const mDay = normalizeString(mDayRobust);
+          const maxDaily = getRefereeMaxDailyLoad(ref, mDayRobust, m.match_date);
           const currentDaily = (refereeDailyLoad[ref.id][mDay] || 0);
           if (currentDaily + 1 > maxDaily) continue;
 
@@ -251,12 +305,30 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
               score += 5000000;
           }
 
-          // Mismo bonus que arriba para partidos sueltos
+          // NORMA SAGRADA para partidos individuales (Fallback)
+          const remainingDailyFb = maxDaily - currentDaily;
+          let hadExplicitSlotFb = false;
+          const ogDayFb = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado', 'Domingo']
+              .find(d => normalizeString(d) === normalizeString(mDayRobust)) || mDayRobust;
+          if (session.weeklySlots && session.weeklySlots[ref.id] && session.weeklySlots[ref.id][ogDayFb] !== undefined) {
+             hadExplicitSlotFb = true;
+          }
+
+          if (remainingDailyFb > 0 && remainingDailyFb % 2 !== 0) {
+              score += 500000000; // Prioridad absoluta
+              if (hadExplicitSlotFb) {
+                  score += 900000000;
+              }
+              if (remainingDailyFb === 1) {
+                  score += 20000000;
+              }
+          } else if (remainingDailyFb > 0 && remainingDailyFb % 2 === 0) {
+              score -= 100000000; // Penalización por romper bloque de horas pares
+          }
+
           if (maxLoad % 2 !== 0) score += 1000000;
-          if (remainingLoad === 1) score += 100;
-          const dispKey = Object.keys(ref.disponibilidad || {}).find(k => normalizeString(k) === mDay);
-          const daySlotsCount = dispKey ? (ref.disponibilidad![dispKey] || []).length : 0;
-          if (daySlotsCount === 1) score += 50;
+          score += 100;
+          score += getPartnerBonus(ref, [m]);
 
           if (score > bestScore) {
             bestScore = score;

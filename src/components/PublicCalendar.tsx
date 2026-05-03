@@ -158,8 +158,8 @@ export default function PublicCalendar() {
                   {referees
                     .filter(r => r.status === 'active')
                     .sort((a, b) => a.name.localeCompare(b.name))
-                    .map(r => (
-                      <option key={r.id} value={r.id}>{r.name}</option>
+                    .map((r, idx) => (
+                      <option key={`pubcal-ref-${r.id || 'no-id'}-${idx}`} value={r.id}>{r.name}</option>
                     ))
                   }
                 </select>
@@ -201,14 +201,14 @@ export default function PublicCalendar() {
               {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(d => (
                 <div key={d} className="text-center text-[10px] font-black text-gray-400 py-2">{d}</div>
               ))}
-              {days.map((day, i) => {
+              {days.map((day) => {
                 const hasMatches = matchesByDay(day).length > 0;
                 const isSelected = selectedDate && isSameDay(day, selectedDate);
                 const isCurrentMonth = isSameMonth(day, currentDate);
                 
                 return (
                   <button
-                    key={i}
+                    key={day.toISOString()}
                     onClick={() => setSelectedDate(day)}
                     className={`
                       aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all active:scale-95
@@ -260,13 +260,13 @@ export default function PublicCalendar() {
                 exit={{ opacity: 0, scale: 0.98 }}
                 className="grid gap-3"
               >
-                {filteredMatches.map((match) => {
+                {filteredMatches.map((match, mi) => {
                   const referee = referees.find(r => r.id === match.referee_id);
                   const teamA = teams.find(t => t.id === match.team_a_id);
                   const teamB = teams.find(t => t.id === match.team_b_id);
 
                   return (
-                    <div key={match.id} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 group relative overflow-hidden">
+                    <div key={`m-${match.id || 'no-id'}-${mi}`} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 group relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-600"></div>
                       
                       <div className="flex justify-between items-start mb-4">

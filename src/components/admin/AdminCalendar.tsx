@@ -14,7 +14,21 @@ import PublicCalendar from '../PublicCalendar';
 
 export default function AdminCalendar() {
   const { matches: matchesRaw, referees, teams, importMatches, reassignReferee, clearMatchesInRange, deleteMatch, clearAllMatches, clearMatchesByPeriod, hiddenPeriods, updateMatchStatus, addSanction } = useData();
-  const matches = matchesRaw.filter(m => !hiddenPeriods.includes(m.period || 'Sin periodo'));
+  
+  const availablePeriods = React.useMemo(() => {
+    return Array.from(new Set(matchesRaw.map(m => m.period || 'Sin periodo'))).sort((a: string, b: string) => b.localeCompare(a));
+  }, [matchesRaw]);
+  
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('');
+  
+  React.useEffect(() => {
+    if ((!selectedPeriod || !availablePeriods.includes(selectedPeriod)) && availablePeriods.length > 0) {
+      setSelectedPeriod(availablePeriods[0]);
+    }
+  }, [availablePeriods, selectedPeriod]);
+
+  const matches = matchesRaw.filter(m => (m.period || 'Sin periodo') === selectedPeriod);
+
   const [dragActive, setDragActive] = useState(false);
   const [tempMatches, setTempMatches] = useState<any[]>([]);
   const [showConflictModal, setShowConflictModal] = useState(false);
@@ -564,106 +578,135 @@ export default function AdminCalendar() {
     if (e.target.files && e.target.files[0]) {
       processFile(e.target.files[0]);
     }
+    e.target.value = '';
   };
 
   const processFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      const data = new Uint8Array(e.target?.result as ArrayBuffer);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      
-      // Use header: 1 to get all rows as arrays for more control
-      const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
-      if (rows.length < 2) return;
-
-      const headers = rows[0].map(h => String(h || '').trim());
-      const dataRows = rows.slice(1);
-      
-      const mappedMatches = dataRows.filter(row => row.length > 0).map((row: any[]) => {
-        const getVal = (possibleHeaders: string[]) => {
-          const index = headers.findIndex(h => possibleHeaders.some(ph => ph.toLowerCase() === h.toLowerCase()));
-          const val = index !== -1 ? row[index] : '';
-          return (val === undefined || val === null) ? '' : String(val).trim();
-        };
-
-        const teamAName = getVal(['EquipoA', 'Equipo A', 'Equipo Local', 'Local']);
-        const teamBName = getVal(['EquipoB', 'Equipo B', 'Equipo Visitante', 'Visitante']);
-        const refereeName = getVal(['Arbitro', 'Árbitro', 'Arbitro ', 'Referee']);
-        const field = getVal(['Campo', 'Lugar', 'Pista']);
-        const competition = getVal(['Categoría', 'Categoria', 'Division', 'Competicion', 'Grupo']);
-        const round = getVal(['Jornada', 'Semana', 'Round']);
-        const time = getVal(['Hora', 'Horario']);
-        const dayNameRaw = getVal(['Dia de la Semana', 'Día de la Semana', 'Dia', 'Día', 'Día Sem.']);
-        const dateRaw = getVal(['Fecha', 'Date']);
-
-        // Find team IDs by name (for preview)
-        const teamA = teams.find(t => t.name.toLowerCase() === teamAName.toLowerCase())?.id || 't-unknown';
-        const teamB = teams.find(t => t.name.toLowerCase() === teamBName.toLowerCase())?.id || 't-unknown';
-        const referee = referees.find(r => r.name.toLowerCase() === refereeName.toLowerCase())?.id || 'r-unassigned';
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
         
-        // Normalize Date to YYYY-MM-DD for internal storage
-        let matchDate = dateRaw;
-        const formattedDate = formatDateDisplay(dateRaw);
-        if (formattedDate.includes('/')) {
-          const [d, m, y] = formattedDate.split('/');
-          matchDate = `${y}-${m}-${d}`;
+        // Use header: 1 to get all rows as arrays for more control
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+        if (rows.length < 2) {
+          setShowErrorModal('El archivo parece estar vacío o no tiene el formato correcto.');
+          return;
         }
 
-        // Normalize Time to HH:MM for internal storage
-        const matchTime = formatTimeDisplay(time);
+        // Find the actual header row (sometimes the first row is a title)
+        let headerRowIndex = 0;
+        let headers: string[] = [];
         
-        // Determinar el nombre del día a partir de la fecha si no viene en el Excel
-        let dayName = dayNameRaw;
-        if (!dayName && matchDate) {
-            const dateObj = new Date(matchDate + 'T12:00:00'); // T12:00 para evitar problemas de zona horaria
-            const daysMap = ["Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sábado"];
-            dayName = daysMap[dateObj.getDay()];
-        }
-
-        return {
-          match_round: round,
-          match_date: matchDate,
-          match_time: matchTime,
-          field: field,
-          competition: competition,
-          team_a_id: teamA,
-          team_b_id: teamB,
-          referee_id: referee,
-          team_a_name: teamAName,
-          team_b_name: teamBName,
-          referee_name: refereeName,
-          day_name: dayName
-        };
-      }).filter(m => m.team_a_name && m.team_b_name); // Only keep valid matches
-
-      if (mappedMatches.length === 0) {
-        setShowErrorModal('No se han encontrado encuentros en el archivo. Asegúrate de que las columnas tengan los nombres correctos (Equipo Local, Equipo Visitante, etc.).');
-        return;
-      }
-
-      setTempMatches(mappedMatches);
-      
-      // Auto-set the date range based on the loaded matches
-      if (mappedMatches.length > 0) {
-        // Find valid dates
-        const dates = mappedMatches.map(m => {
-          // If match_date is in YYYY-MM-DD format
-          const [y, mm, d] = m.match_date.split('-');
-          if (y && mm && d) {
-             return new Date(parseInt(y), parseInt(mm)-1, parseInt(d));
+        for (let i = 0; i < Math.min(rows.length, 10); i++) {
+          const r = rows[i].map(h => String(h || '').trim());
+          if (r.some(h => ['Local', 'Visitante', 'Equipo Local', 'Equipo A', 'EquipoA', 'EquipoB'].includes(h))) {
+            headerRowIndex = i;
+            headers = r;
+            break;
           }
-          return new Date(m.match_date);
-        }).filter(d => !isNaN(d.getTime()));
-        
-        if (dates.length > 0) {
-          const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
-          const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
-          setStartDate(minDate);
-          setEndDate(maxDate);
-          setCurrentMonth(minDate);
         }
+
+        if (headers.length === 0) {
+           headers = rows[0].map(h => String(h || '').trim());
+        }
+
+        const dataRows = rows.slice(headerRowIndex + 1);
+        
+        console.log("Headers found:", headers);
+        
+        const mappedMatches = dataRows.filter(row => row.length > 0).map((row: any[]) => {
+          const getVal = (possibleHeaders: string[]) => {
+            const index = headers.findIndex(h => possibleHeaders.some(ph => ph?.toLowerCase() === h?.toLowerCase()));
+            const val = index !== -1 ? row[index] : '';
+            return (val === undefined || val === null) ? '' : String(val).trim();
+          };
+
+          const teamAName = getVal(['EquipoA', 'Equipo A', 'Equipo Local', 'Local']);
+          const teamBName = getVal(['EquipoB', 'Equipo B', 'Equipo Visitante', 'Visitante']);
+          const refereeName = getVal(['Arbitro', 'Árbitro', 'Arbitro ', 'Referee']);
+          const field = getVal(['Campo', 'Lugar', 'Pista', 'Cancha', 'Instalación', 'Instalacion', 'Sede']);
+          const competition = getVal(['Categoría', 'Categoria', 'Division', 'División', 'Competicion', 'Competición', 'Grupo']);
+          const round = getVal(['Jornada', 'Semana', 'Round']);
+          const time = getVal(['Hora', 'Horario']);
+          const dayNameRaw = getVal(['Dia de la Semana', 'Día de la Semana', 'Dia', 'Día', 'Día Sem.', 'Dia Sem']);
+          const dateRaw = getVal(['Fecha', 'Date']);
+
+          // Find team IDs by name (for preview)
+          const teamA = teams.find(t => t.name?.toLowerCase() === teamAName?.toLowerCase())?.id || 't-unknown';
+          const teamB = teams.find(t => t.name?.toLowerCase() === teamBName?.toLowerCase())?.id || 't-unknown';
+          const referee = referees.find(r => r.name?.toLowerCase() === refereeName?.toLowerCase())?.id || 'r-unassigned';
+          
+          // Normalize Date to YYYY-MM-DD for internal storage
+          let matchDate = dateRaw;
+          const formattedDate = formatDateDisplay(dateRaw);
+          if (formattedDate.includes('/')) {
+            const [d, m, y] = formattedDate.split('/');
+            matchDate = `${y}-${m}-${d}`;
+          }
+
+          // Normalize Time to HH:MM for internal storage
+          const matchTime = formatTimeDisplay(time);
+          
+          // Determinar el nombre del día a partir de la fecha si no viene en el Excel
+          let dayName = dayNameRaw;
+          if (!dayName && matchDate) {
+              const dateObj = new Date(matchDate + 'T12:00:00'); // T12:00 para evitar problemas de zona horaria
+              if (!isNaN(dateObj.getTime())) {
+                const daysMap = ["Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sábado"];
+                dayName = daysMap[dateObj.getDay()];
+              }
+          }
+
+          return {
+            match_round: round,
+            match_date: matchDate,
+            match_time: matchTime,
+            field: field,
+            competition: competition,
+            team_a_id: teamA,
+            team_b_id: teamB,
+            referee_id: referee,
+            team_a_name: teamAName,
+            team_b_name: teamBName,
+            referee_name: refereeName,
+            day_name: dayName
+          };
+        }).filter(m => m.team_a_name && m.team_b_name); // Only keep valid matches
+
+        if (mappedMatches.length === 0) {
+          setShowErrorModal(`No se han encontrado encuentros válidos en el archivo. Asegúrate de que tenga las columnas correctas (Ej: "Equipo Local", "Equipo Visitante"). Cabeceras detectadas: ${headers.filter(Boolean).join(', ')}`);
+          return;
+        }
+
+        setTempMatches(mappedMatches);
+        
+        // Auto-set the date range based on the loaded matches
+        if (mappedMatches.length > 0) {
+          // Find valid dates
+          const dates = mappedMatches.map(m => {
+            // If match_date is in YYYY-MM-DD format
+            const [y, mm, d] = m.match_date.split('-');
+            if (y && mm && d) {
+               return new Date(parseInt(y), parseInt(mm)-1, parseInt(d));
+            }
+            return new Date(m.match_date);
+          }).filter(d => !isNaN(d.getTime()));
+          
+          if (dates.length > 0) {
+            const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+            const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+            setStartDate(minDate);
+            setEndDate(maxDate);
+            setCurrentMonth(minDate);
+          }
+        }
+      } catch (err: any) {
+        console.error('Error procesando archivo:', err);
+        setShowErrorModal(`Error al leer el archivo: ${err.message || 'Formato no soportado'}`);
       }
     };
     reader.readAsArrayBuffer(file);
@@ -675,12 +718,18 @@ export default function AdminCalendar() {
       return;
     }
 
-    // Convert Date objects to YYYY-MM-DD strings
     const startStr = format(startDate, 'yyyy-MM-dd');
     const endStr = format(endDate, 'yyyy-MM-dd');
+    
+    // Check for conflicts: either by date range or by having the same 'Jornada'
+    const importedRounds = Array.from(new Set(tempMatches.map(m => String(m.match_round).trim().toLowerCase()).filter(Boolean)));
+    const conflicts = matches.filter(m => {
+      const inDateRange = m.match_date >= startStr && m.match_date <= endStr;
+      const mRound = String(m.match_round || '').trim().toLowerCase();
+      const hasSameRound = mRound !== '' && importedRounds.includes(mRound);
+      return inDateRange || hasSameRound;
+    });
 
-    // Check for conflicts
-    const conflicts = matches.filter(m => m.match_date >= startStr && m.match_date <= endStr);
     if (conflicts.length > 0) {
       setShowConflictModal(true);
     } else {
@@ -693,13 +742,23 @@ export default function AdminCalendar() {
     const startStr = format(startDate, 'yyyy-MM-dd');
     const endStr = format(endDate, 'yyyy-MM-dd');
     
+    const importedRounds = Array.from(new Set(tempMatches.map(m => String(m.match_round).trim().toLowerCase()).filter(Boolean)));
+    const conflicts = matches.filter(m => {
+      const inDateRange = m.match_date >= startStr && m.match_date <= endStr;
+      const mRound = String(m.match_round || '').trim().toLowerCase();
+      const hasSameRound = mRound !== '' && importedRounds.includes(mRound);
+      return inDateRange || hasSameRound;
+    });
+    
     // Si estamos sustituyendo (hay conflictos), borrar antes
-    const conflicts = matches.filter(m => m.match_date >= startStr && m.match_date <= endStr);
     if (conflicts.length > 0) {
-        await clearMatchesInRange(startStr, endStr);
+        // En vez de clearMatchesInRange, borramos los conflictos encontrados
+        for (const match of conflicts) {
+           await deleteMatch(match.id);
+        }
     }
     
-    importMatches(tempMatches, `${startStr}_to_${endStr}`, startStr, endStr);
+    await importMatches(tempMatches, `${startStr}_to_${endStr}`, startStr, endStr);
     setShowConflictModal(false);
     setShowSuccessModal(true);
     setTempMatches([]);
@@ -801,23 +860,26 @@ export default function AdminCalendar() {
     }
   };
 
-  const refereeLoadData = React.useMemo(() => referees.map(ref => {
-    const assignedMatches = matches.filter(m => m.referee_id === ref.id);
-    let totalSlots = 0;
-    if (ref.disponibilidad) {
-        Object.values(ref.disponibilidad).forEach((slots) => {
-          if (Array.isArray(slots)) {
-            totalSlots += slots.length;
-          }
-        });
-    }
-    return {
-      name: ref.name,
-      assignedCount: assignedMatches.length,
-      totalSlots,
-      remaining: Math.max(0, totalSlots - assignedMatches.length)
-    };
-  }).sort((a, b) => b.remaining - a.remaining), [referees, matches]);
+  const refereeLoadData = React.useMemo(() => {
+    return referees.map(ref => {
+      const assignedMatches = matches.filter(m => m.referee_id === ref.id);
+      let totalSlots = 0;
+      if (ref.disponibilidad) {
+          Object.values(ref.disponibilidad).forEach((slots) => {
+            if (Array.isArray(slots)) {
+              totalSlots += slots.length;
+            }
+          });
+      }
+      return {
+        id: ref.id,
+        name: ref.name,
+        assignedCount: assignedMatches.length,
+        totalSlots,
+        remaining: Math.max(0, totalSlots - assignedMatches.length)
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [referees, matches]);
 
   const selectedRefereeMatches = matches.filter(m => m.referee_id === selectedRefereeId);
 
@@ -852,9 +914,9 @@ export default function AdminCalendar() {
           </div>
           <div className="grid grid-cols-7 gap-2">
             {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => <div key={d} className="text-center font-bold text-xs text-gray-400">{d}</div>)}
-            {getDaysInMonth(currentMonth).map(day => (
+            {getDaysInMonth(currentMonth).map((day, dIdx) => (
               <button 
-                key={day.toString()}
+                key={`cal-day-${day.toISOString()}-${dIdx}`}
                 onClick={() => handleDateClick(day)}
                 className={`p-2 rounded-lg text-sm font-bold transition-colors ${
                   isSameDay(day, startDate || new Date(0)) || isSameDay(day, endDate || new Date(0)) 
@@ -955,7 +1017,7 @@ export default function AdminCalendar() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-50">
                   {tempMatches.map((m, i) => (
-                    <tr key={i} className="text-xs font-medium text-gray-600">
+                    <tr key={`temp-${i}`} className="text-xs font-medium text-gray-600">
                       <td className="px-4 py-3">{m.match_round}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
@@ -1001,8 +1063,8 @@ export default function AdminCalendar() {
                 onChange={(e) => setSelectedRefereeId(e.target.value)}
               >
                 <option value="">-- Selecciona un árbitro --</option>
-                {referees.map(ref => (
-                  <option key={ref.id} value={ref.id}>{ref.name}</option>
+                {referees.map((ref, idx) => (
+                  <option key={`ref-${ref.id || 'no-id'}-${idx}`} value={ref.id}>{ref.name}</option>
                 ))}
               </select>
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -1013,11 +1075,11 @@ export default function AdminCalendar() {
             <div className="space-y-4">
               <p className="text-sm font-bold text-gray-700">Partidos asignados: {selectedRefereeMatches.length}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {selectedRefereeMatches.map(match => {
+                {selectedRefereeMatches.map((match, smIndex) => {
                   const teamA = teams.find(t => t.id === match.team_a_id);
                   const teamB = teams.find(t => t.id === match.team_b_id);
                   return (
-                    <div key={match.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
+                    <div key={`sel-${match.id || 'no-id'}-${smIndex}`} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
                       <div>
                         <div className="flex items-center text-xs font-bold text-gray-900 mb-1">
                           <Shield className="w-3 h-3 mr-1.5 text-emerald-500" />
@@ -1045,13 +1107,26 @@ export default function AdminCalendar() {
 
       {/* All Matches Table */}
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div>
             <h3 className="text-lg font-bold text-gray-900">Partidos Cargados en el Sistema</h3>
             <p className="text-sm text-gray-500 font-medium">Total: {matches.length} partidos</p>
           </div>
-          <div className="flex gap-2">
-            <button
+          <div className="flex items-center gap-4">
+            <div className="flex items-center bg-gray-50 p-1.5 rounded-xl border border-gray-200">
+              <span className="text-xs font-medium text-gray-500 px-3 py-1">Periodo visible:</span>
+              <select
+                value={selectedPeriod}
+                onChange={(e) => setSelectedPeriod(e.target.value)}
+                className="bg-white border-0 text-xs font-bold text-gray-900 rounded-lg px-3 py-1 shadow-sm focus:ring-2 focus:ring-blue-500 min-w-[200px]"
+              >
+                {availablePeriods.map(p => (
+                  <option key={p} value={p}>{p === 'Sin periodo' ? 'Sin periodo' : p.split('_to_').map(formatDateDisplay).join(' al ')}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button
               onClick={handleOpenPublicCalendar}
               className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-md active:scale-95"
               title="Ver cómo lo ven los árbitros"
@@ -1094,6 +1169,7 @@ export default function AdminCalendar() {
               <Trash2 className="w-4 h-4 mr-2" />
               Borrar Todo
             </button>
+            </div>
           </div>
         </div>
 
@@ -1118,7 +1194,7 @@ export default function AdminCalendar() {
               const color = getRefereeColor(ref.id);
               return (
                 <div
-                  key={ref.id}
+                  key={`drag-${ref.id || 'no-id'}-${idx}`}
                   draggable
                   onDragStart={(e) => handleDragStart(e, ref.id)}
                   onDrag={handleRefereeDrag}
@@ -1150,7 +1226,7 @@ export default function AdminCalendar() {
               return a.match_time.localeCompare(b.match_time);
             });
           return (
-            <div key={period} className="mb-8">
+            <div key={`p-${period}`} className="mb-8">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-sm font-bold text-gray-700 bg-gray-100 px-3 py-1 rounded-lg">
                   {period === 'Sin periodo' ? 'Sin periodo' : `Periodo: ${(period as string).split('_to_').map(formatDateDisplay).join(' al ')}`}
@@ -1187,7 +1263,7 @@ export default function AdminCalendar() {
                       const currentStatus = m.status || 'Programado';
                       return (
                         <tr 
-                          key={m.id} 
+                          key={`grid-${m.id || 'no-id'}-${index}`} 
                           onDragOver={(e) => {
                             e.preventDefault();
                             setDragOverMatchId(m.id);
@@ -1677,8 +1753,8 @@ export default function AdminCalendar() {
                           );
                           return !hasMatchThatDay;
                         })
-                        .map(ref => (
-                          <option key={ref.id} value={ref.id}>{ref.name}</option>
+                        .map((ref, idx) => (
+                          <option key={`mref-${ref.id || 'no-id'}-${idx}`} value={ref.id}>{ref.name}</option>
                         ))
                       }
                     </select>
@@ -1795,7 +1871,7 @@ export default function AdminCalendar() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {refereeLoadData.map((ref, idx) => (
-                      <tr key={idx} className="group hover:bg-slate-50 transition-colors">
+                      <tr key={`load-${ref.id || 'no-id'}-${idx}`} className="group hover:bg-slate-50 transition-colors">
                         <td className="py-4 font-bold text-gray-900 text-sm uppercase">{ref.name}</td>
                         <td className="py-4 text-center font-bold text-blue-600 font-mono">{ref.assignedCount}h</td>
                         <td className="py-4 text-center font-bold text-gray-400 font-mono">{ref.totalSlots}h</td>

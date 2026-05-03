@@ -189,8 +189,8 @@ export default function Login() {
                       {referees
                         .slice()
                         .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
-                        .map(ref => (
-                        <option key={ref.id} value={ref.username}>{ref.name.toUpperCase()}</option>
+                        .map((ref, idx) => (
+                        <option key={`login-ref-${ref.id || 'no-id'}-${idx}`} value={ref.username}>{ref.name.toUpperCase()}</option>
                       ))}
                     </select>
                     <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">

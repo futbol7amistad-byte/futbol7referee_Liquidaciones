@@ -138,7 +138,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const handleError = (err: any) => {
       console.error("Firestore error:", err);
       if (err.message.toLowerCase().includes('quota') || err.message.toLowerCase().includes('resource-exhausted')) {
-        setError("Límite diario de lecturas superado. Tus datos ESTÁN A SALVO y no se han borrado, pero Google ha bloqueado temporalmente el acceso. El límite se reiniciará automáticamente esta medianoche (hora del Pacífico, aprox 9:00 AM en España). Para soluciones inmediatas, contáctanos.");
+        setError(`Límite diario de lecturas superado: ${err.message}. Tus datos ESTÁN A SALVO. Si acabas de actualizar a Blaze, puede tardar unos minutos en reflejarse.`);
       } else if (err.message.toLowerCase().includes('permission-denied')) {
         setError("Error de permisos: No tienes acceso a los datos de la temporada actual.");
       }
@@ -403,7 +403,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setTeams(prev => prev.map(t => ({ ...t, total_sanctions: 0, pending_amount: 0 })));
   };
 
-  const importMatches = async (newMatches: any[], period: string, startDate: string, endDate: string) => {
+  const importMatches = async (newMatches: any[], period: string, startDate: string, endDate: string): Promise<void> => {
     if (!currentSeason) return;
     const generateInitialPassword = () => {
       const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -640,23 +640,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       addAccountingAccount, updateAccountingAccount, deleteAccountingAccount, addTransaction, deleteTransaction, updateEconomicSettings, updateTeamEconomicStatus,
       clearAllEconomicData, syncMatchAccounting
     }}>
-      {error && (
-        <div className="fixed top-4 right-4 z-[9999] max-w-sm">
-          <div className="bg-red-600 text-white p-4 rounded-lg shadow-2xl flex items-start space-x-3 animate-bounce">
-            <div className="flex-shrink-0 mt-0.5">⚠️</div>
-            <div className="flex-grow">
-              <p className="text-sm font-bold">Error de Base de Datos</p>
-              <p className="text-xs opacity-90">{error}</p>
-              <button 
-                onClick={() => setError(null)}
-                className="mt-2 text-xs bg-white/20 hover:bg-white/40 px-2 py-1 rounded transition-colors"
-              >
-                Entendido
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {children}
     </DataContext.Provider>
   );

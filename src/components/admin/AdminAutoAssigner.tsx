@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Zap, Calendar, Upload, Check, X, FileSpreadsheet, Settings, Save, Pin } from 'lucide-react';
 import { useData } from '../../store/DataContext';
@@ -7,6 +7,7 @@ import { runAutoAssignment } from '../../services/auto_assigner/AutoAssigner';
 import { db } from '../../lib/firebase';
 import { doc, writeBatch } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
+import { formatDateDisplay } from '../../utils/formatters';
 
 export default function AdminAutoAssigner() {
   const { currentSeason } = useSeason();
@@ -48,8 +49,33 @@ export default function AdminAutoAssigner() {
       }
   };
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const availablePeriods = useMemo(() => {
+    const periods = new Set<string>();
+    matchesRaw.forEach(m => {
+       if (m.period) periods.add(m.period);
+       else periods.add('Sin periodo');
+    });
+    return Array.from(periods).sort((a, b) => b.localeCompare(a));
+  }, [matchesRaw]);
 
-  const matches = useMemo(() => matchesRaw.filter(m => !hiddenPeriods.includes(m.period || 'Sin periodo')), [matchesRaw, hiddenPeriods]);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('');
+
+  React.useEffect(() => {
+    if ((!selectedPeriod || !availablePeriods.includes(selectedPeriod)) && availablePeriods.length > 0) {
+      setSelectedPeriod(availablePeriods[0]);
+    }
+  }, [availablePeriods, selectedPeriod]);
+
+  const matches = useMemo(() => {
+      let filtered = matchesRaw;
+      if (selectedPeriod && selectedPeriod !== 'all') {
+          filtered = filtered.filter(m => (m.period || 'Sin periodo') === selectedPeriod);
+      } else {
+          filtered = filtered.filter(m => !hiddenPeriods.includes(m.period || 'Sin periodo'));
+      }
+      return filtered;
+  }, [matchesRaw, hiddenPeriods, selectedPeriod]);
 
   const days = ['Lunes', 'Martes', 'Miercoles', 'Jueves'];
 
@@ -169,25 +195,20 @@ export default function AdminAutoAssigner() {
     referees.forEach(ref => {
         if (ref.status !== 'active') return;
         const refSlots = weeklySlots[ref.id] || {};
-        effectiveWeeklySlots[ref.id] = {};
+        
+        let hasAnyExplicit = false;
+        const explicitSlots: Record<string, number> = {};
         
         ['Lunes', 'Martes', 'Miercoles', 'Jueves'].forEach(day => {
             if (refSlots[day] !== undefined) {
-                effectiveWeeklySlots[ref.id][day] = refSlots[day];
-            } else {
-                // Fallback to disponibilidad igual que en la UI
-                const normDay = day.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                const dispKey = Object.keys(ref.disponibilidad || {}).find(k => k.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === normDay);
-                let val = 0;
-                if (dispKey && ref.disponibilidad) {
-                    const slots = ref.disponibilidad[dispKey];
-                    if (Array.isArray(slots)) {
-                        val = slots.length;
-                    }
-                }
-                effectiveWeeklySlots[ref.id][day] = val;
+                explicitSlots[day] = refSlots[day];
+                hasAnyExplicit = true;
             }
         });
+        
+        if (hasAnyExplicit) {
+            effectiveWeeklySlots[ref.id] = explicitSlots;
+        }
     });
 
     inactiveRefs.forEach(id => {
@@ -198,11 +219,12 @@ export default function AdminAutoAssigner() {
         matches: forceReassignAll ? matches.map(m => ({ ...m, referee_id: '' })) : matches,
         referees: referees,
         period: 'curr-period-1',
-        dynamicPairings: [],
+        dynamicPairings: [] as [string, string][],
         history: historyMatches,
         weeklySlots: Object.keys(effectiveWeeklySlots).length > 0 || inactiveRefs.length > 0 ? effectiveWeeklySlots : undefined,
         mandatoryDays: Object.keys(mandatoryDays).length > 0 ? mandatoryDays : undefined,
-        forceReassignAll
+        forceReassignAll,
+        venueCosts: settings.venue_costs
     };
     const assignments = runAutoAssignment(session, isRetry ? newSeed : seed);
     setAssignmentResults(assignments);
@@ -278,8 +300,8 @@ export default function AdminAutoAssigner() {
         <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Asignaciones</h2>
         <p className="text-sm text-slate-500 font-bold mt-1">Generación inteligente con restricciones.</p>
         
-        <div className="mt-4 flex items-center gap-3">
-          <label className="flex items-center gap-3 cursor-pointer group">
+        <div className="mt-4 flex flex-col gap-4">
+          <label className="flex items-center gap-3 cursor-pointer group w-max">
             <div className="relative flex items-center justify-center">
               <input 
                   type="checkbox" 
@@ -293,6 +315,22 @@ export default function AdminAutoAssigner() {
             </div>
             <span className="text-sm font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">Ignorar Asignaciones Existentes</span>
           </label>
+          <div className="flex items-center gap-3 w-max">
+            <span className="text-sm font-black text-slate-700 uppercase">Periodo:</span>
+            <select 
+                value={selectedPeriod}
+                onChange={(e) => setSelectedPeriod(e.target.value)}
+                className="bg-white border text-sm border-slate-200 text-slate-700 rounded-xl px-3 py-1.5 font-bold shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+                <option key="all-visible" value="all">Todos (Visibles)</option>
+                {availablePeriods.map((p, idx) => (
+                    <option key={`period-opt-${idx}`} value={p}>
+                      {p === 'Sin periodo' ? 'Sin periodo' : p.split('_to_').map(formatDateDisplay).join(' al ')}
+                    </option>
+                ))}
+            </select>
+            <span className="text-xs text-slate-400 font-medium">Asignar sólo los partidos del periodo seleccionado</span>
+          </div>
         </div>
       </div>
 
@@ -479,9 +517,9 @@ export default function AdminAutoAssigner() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-blue-50">
-                            {refereeSummary.map(ref => {
+                            {refereeSummary.map((ref, idx) => {
                                 return (
-                                <tr key={ref.id} className="hover:bg-slate-50/80 transition-colors">
+                                <tr key={`sum-ref-${ref.id || 'no-id'}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
                                     <td className="px-5 py-3 text-xs font-black text-slate-800 truncate">
                                         {ref.name}
                                     </td>
@@ -580,13 +618,13 @@ export default function AdminAutoAssigner() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {referees.filter(r => r.status === 'active').sort((a,b) => a.name.localeCompare(b.name)).map(ref => {
+                            {referees.filter(r => r.status === 'active').sort((a,b) => a.name.localeCompare(b.name)).map((ref, idx) => {
                                 const isInactive = inactiveRefs.includes(ref.id);
 
                                 let rowTotal = 0;
 
                                 return (
-                                <tr key={ref.id} className={`hover:bg-slate-50/80 transition-colors ${isInactive ? 'opacity-50 grayscale bg-slate-50' : ''}`}>
+                                <tr key={`cfg-ref-${ref.id || 'no-id'}-${idx}`} className={`hover:bg-slate-50/80 transition-colors ${isInactive ? 'opacity-50 grayscale bg-slate-50' : ''}`}>
                                     <td className="px-5 py-3 text-xs font-black text-slate-800 truncate" title={ref.name}>
                                         {ref.name}
                                     </td>

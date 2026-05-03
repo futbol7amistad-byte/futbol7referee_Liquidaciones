@@ -19,7 +19,7 @@ export const normalizeString = (s: any) => {
 
 export const isRefereeAvailable = (ref: Referee, match: Match, session: AssignmentSession): boolean => {
   const prefs = ref.preferences || { nivel: 3, camposVetados: [], equiposVetados: [] };
-  const dayName = normalizeString(match.day_name);
+  const dayName = normalizeString(match.day_name || getDayName(match.match_date));
 
   let daySlotsFromExcel: number | undefined;
   if (session.weeklySlots && session.weeklySlots[ref.id]) {

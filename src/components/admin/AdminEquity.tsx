@@ -113,25 +113,25 @@ export default function AdminEquity() {
             <thead className="bg-slate-50 sticky top-0 z-30 shadow-[0_2px_5px_rgba(0,0,0,0.05)]">
               <tr>
                 <th className="px-6 py-4 font-black uppercase tracking-widest text-slate-400 border-b border-slate-200 sticky left-0 bg-slate-50 z-40 w-48 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">Árbitro</th>
-                {sortedTeams.map(t => (
-                  <th key={t.id} className="px-4 py-4 font-black uppercase tracking-widest text-slate-400 border-b border-slate-200 text-center min-w-[60px]">{t.name}</th>
+                {sortedTeams.map((t, idx) => (
+                  <th key={`equ-th-${t.id}-${idx}`} className="px-4 py-4 font-black uppercase tracking-widest text-slate-400 border-b border-slate-200 text-center min-w-[60px]">{t.name}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {sortedReferees.map((r, index) => (
                 <tr 
-                  key={r.id} 
+                  key={`equ-tr-${r.id}-${index}`} 
                   className={`${index % 2 !== 0 ? 'bg-slate-100/50' : 'bg-white'} hover:bg-indigo-100/50 transition-colors group`}
                 >
                   <td className="px-6 py-4 font-black uppercase tracking-tight text-slate-900 border-b border-slate-200 sticky left-0 bg-inherit z-10 shadow-[4px_0_10px_rgba(0,0,0,0.05)]">
                     {r.name}
                   </td>
-                  {sortedTeams.map(t => {
+                  {sortedTeams.map((t, idx) => {
                     const count = counts[r.id]?.[t.id] || 0;
                     return (
                       <td 
-                        key={t.id} 
+                        key={`equ-td-${t.id}-${idx}`} 
                         className={`px-4 py-4 text-center font-bold border-b border-slate-200 ${count > 0 ? 'text-indigo-600' : 'text-slate-300'}`}
                       >
                         {count || '-'}

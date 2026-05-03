@@ -46,7 +46,7 @@ export const SeasonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         console.error("Season loading error:", err);
         setLoading(false);
         if (err.message.includes('quota') || err.message.includes('resource-exhausted')) {
-          setError("Límite de Firebase alcanzado (Cuota).");
+          setError(`Límite de Firebase alcanzado (Cuota): ${err.message}`);
         } else {
           setError("Error cargando temporadas: " + err.message);
         }
@@ -71,15 +71,6 @@ export const SeasonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   return (
     <SeasonContext.Provider value={{ currentSeason, seasons, setCurrentSeason }}>
-      {error && (
-        <div className="fixed bottom-4 left-4 z-[9999] bg-red-600 text-white p-4 rounded-2xl text-xs font-bold shadow-2xl animate-bounce flex items-center gap-3">
-          <span className="text-xl">⚠️</span>
-          <div>
-            <p className="font-black uppercase tracking-widest">Error de Conexión</p>
-            <p className="opacity-90">{error}</p>
-          </div>
-        </div>
-      )}
       {loading && seasons.length === 0 && !error && (
         <div className="fixed inset-0 z-[9999] bg-white/80 backdrop-blur-sm flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">

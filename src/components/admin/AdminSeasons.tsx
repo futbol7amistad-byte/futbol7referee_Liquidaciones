@@ -44,8 +44,8 @@ export default function Seasons() {
       </div>
 
       <div className="grid gap-4">
-        {seasons.map(s => (
-          <div key={s.id} className="border border-slate-200 p-4 rounded-xl flex items-center justify-between">
+        {seasons.map((s, idx) => (
+          <div key={`sea-${s.id || 'no-id'}-${idx}`} className="border border-slate-200 p-4 rounded-xl flex items-center justify-between">
             <div>
               <p className="font-bold text-slate-900">{s.name}</p>
               <p className="text-sm text-slate-600">
