@@ -38,6 +38,7 @@ interface DataContextType {
   addTeam: (data: Partial<Team>) => Promise<string>;
   updateTeam: (id: string, data: Partial<Team>) => Promise<void>;
   updateMatchStatus: (matchId: string, status: 'Programado' | 'Liquidado' | 'Suspendido' | 'Aplazado') => Promise<void>;
+  updateMatch: (matchId: string, updates: Partial<Match>) => Promise<void>;
   assignmentResults: any[];
   setAssignmentResults: (results: any[]) => void;
   settings: AppSettings;
@@ -554,6 +555,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     await syncMatchAccounting(matchId);
   };
 
+  const updateMatch = async (matchId: string, updates: Partial<Match>) => {
+    if (!currentSeason) return;
+    try {
+      await updateDoc(doc(db, 'seasons', currentSeason.id, 'matches', matchId), updates);
+    } catch(e) {}
+  };
+
   const addAccountingAccount = async (account: Omit<AccountingAccount, 'id'>) => {
     if (!currentSeason) return;
     await addDoc(collection(db, 'seasons', currentSeason.id, 'accounting_accounts'), account);
@@ -634,7 +642,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       addPayment, addDelivery, addRefereeAdvance, deleteRefereeAdvance, addReferee, updateReferee, deleteReferee,
       addSanction, markSanctionAsPaid, clearSanctions,
       importMatches, reassignReferee, clearMatchesInRange, clearMatchesByPeriod, deleteMatch, clearAllMatches, addTeam, updateTeam,
-      settings, updateSettings, updateMatchStatus,
+      settings, updateSettings, updateMatchStatus, updateMatch,
       hiddenPeriods, hidePeriod, showPeriod,
       error, clearError: () => setError(null),
       addAccountingAccount, updateAccountingAccount, deleteAccountingAccount, addTransaction, deleteTransaction, updateEconomicSettings, updateTeamEconomicStatus,

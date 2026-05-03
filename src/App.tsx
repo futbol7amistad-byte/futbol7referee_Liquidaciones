@@ -64,8 +64,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={
-        <div className="min-h-screen flex flex-col">
-          <div className="flex-grow flex items-center justify-center">
+        <div className="min-h-screen flex flex-col w-full">
+          <div className="flex-grow flex items-center justify-center w-full">
             {user ? <Navigate to={user.role === 'referee' ? '/referee' : '/admin'} /> : <Login />}
           </div>
           <Footer />

@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useData } from '../../store/DataContext';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
-import { Calendar, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, X, ChevronDown, User, ArrowRight, RefreshCw, Shield, Trash2, ChevronLeft, ChevronRight, MessageSquare, GripVertical, FileText } from 'lucide-react';
+import { Calendar, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, X, ChevronDown, User, ArrowRight, RefreshCw, Shield, Trash2, ChevronLeft, ChevronRight, MessageSquare, GripVertical, FileText, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
 import { Match, Referee } from '../../types';
@@ -13,7 +13,7 @@ import { es } from 'date-fns/locale';
 import PublicCalendar from '../PublicCalendar';
 
 export default function AdminCalendar() {
-  const { matches: matchesRaw, referees, teams, importMatches, reassignReferee, clearMatchesInRange, deleteMatch, clearAllMatches, clearMatchesByPeriod, hiddenPeriods, updateMatchStatus, addSanction } = useData();
+  const { matches: matchesRaw, referees, teams, importMatches, reassignReferee, clearMatchesInRange, deleteMatch, clearAllMatches, clearMatchesByPeriod, hiddenPeriods, updateMatchStatus, updateMatch, addSanction, settings } = useData();
   
   const availablePeriods = React.useMemo(() => {
     return Array.from(new Set(matchesRaw.map(m => m.period || 'Sin periodo'))).sort((a: string, b: string) => b.localeCompare(a));
@@ -134,6 +134,9 @@ export default function AdminCalendar() {
 
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [warningMessage, setWarningMessage] = useState('');
+
+  const [matchToEditField, setMatchToEditField] = useState<Match | null>(null);
+  const [newField, setNewField] = useState('');
   const [pendingReassignData, setPendingReassignData] = useState<{matchId: string, refId: string, both: boolean} | null>(null);
 
   const handleDragStart = (e: React.DragEvent, refId: string, originMatchId?: string) => {
@@ -1333,20 +1336,30 @@ export default function AdminCalendar() {
                             <div className="flex justify-end items-center gap-1">
                               <button
                                 onClick={() => {
+                                  setMatchToEditField(m);
+                                  setNewField(m.field || '');
+                                }}
+                                className="p-2 text-green-500 hover:text-green-700 transition-colors"
+                                title="Cambiar Campo"
+                              >
+                                <MapPin className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => {
                                   setMatchToEditStatus(m);
                                   setStatusToSave(m.status || 'Programado');
                                   setApplySanction(false);
                                   setSanctionAmount(0);
                                   setSanctionTeamId('');
                                 }}
-                                className="p-2 text-gray-400 hover:text-indigo-600 transition-colors"
+                                className="p-2 text-blue-500 hover:text-blue-700 transition-colors"
                                 title="Cambiar Estado"
                               >
                                 <RefreshCw className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => setMatchToDelete(m.id)}
-                                className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                                className="p-2 text-red-500 hover:text-red-700 transition-colors"
                                 title="Eliminar"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -1566,6 +1579,62 @@ export default function AdminCalendar() {
                   onClick={() => {
                     setMatchToEditStatus(null);
                     setApplySanction(false);
+                  }}
+                  className="w-full py-4 bg-gray-100 text-gray-600 rounded-2xl font-black text-sm hover:bg-gray-200 transition-all active:scale-95"
+                >
+                  CANCELAR
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {matchToEditField && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-[0_30px_60px_rgba(0,0,0,0.3)] border border-gray-100 text-left relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-blue-500"></div>
+              <h3 className="text-2xl font-black text-gray-900 mb-6">Modificar Campo</h3>
+              
+              <div className="space-y-4 mb-8">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 justify-start uppercase tracking-widest mb-2 text-left">Nuevo Campo / Instalación</label>
+                  <select
+                    value={newField}
+                    onChange={(e) => setNewField(e.target.value)}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="">-- Seleccionar campo limpio --</option>
+                    {[...new Set(matchesRaw.map(x => x.field).filter(Boolean) as string[])]
+                      .sort((a, b) => (a || '').localeCompare(b || ''))
+                      .filter(f => !matchesRaw.some(x => x.id !== matchToEditField.id && x.field === f && x.match_date === matchToEditField.match_date && x.match_time === matchToEditField.match_time))
+                      .map((f, i) => (
+                        <option key={`f-${i}-${f}`} value={f}>{f}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  onClick={async () => {
+                    await updateMatch(matchToEditField.id, { field: newField });
+                    setMatchToEditField(null);
+                    setNewField('');
+                  }}
+                  disabled={!newField.trim()}
+                  className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  GUARDAR CAMBIO
+                </button>
+                <button
+                  onClick={() => {
+                    setMatchToEditField(null);
+                    setNewField('');
                   }}
                   className="w-full py-4 bg-gray-100 text-gray-600 rounded-2xl font-black text-sm hover:bg-gray-200 transition-all active:scale-95"
                 >
@@ -1919,8 +1988,12 @@ export default function AdminCalendar() {
           >
             <div className="bg-slate-900 px-6 py-4 flex items-center justify-between shadow-2xl relative z-[10000]">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-lg transform rotate-3">
-                  <Shield className="w-8 h-8 text-blue-600" />
+                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center p-1.5 shadow-lg transform rotate-3">
+                  {settings?.logo_url ? (
+                     <img src={settings.logo_url} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                  ) : (
+                     <Shield className="w-8 h-8 text-blue-600" />
+                  )}
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-white uppercase tracking-wider leading-tight">

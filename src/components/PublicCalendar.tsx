@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { formatDateDisplay, formatTimeDisplay } from '../utils/formatters';
 
 export default function PublicCalendar() {
-  const { matches, referees, teams, hiddenPeriods } = useData();
+  const { matches, referees, teams, hiddenPeriods, settings } = useData();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [searchRefereeId, setSearchRefereeId] = useState('');
@@ -101,11 +101,18 @@ export default function PublicCalendar() {
     <div className="min-h-screen bg-slate-50 pb-12">
       {/* Header */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-40 px-4 py-8 shadow-sm">
+        {settings?.logo_url && (
+            <div className="absolute top-4 left-4 sm:top-6 sm:left-6">
+                <img 
+                  src={settings.logo_url} 
+                  alt="Logo Campeonato" 
+                  className="w-12 h-12 sm:w-16 sm:h-16 object-contain drop-shadow-sm"
+                  referrerPolicy="no-referrer"
+                />
+            </div>
+        )}
         <div className="max-w-4xl mx-auto flex flex-col items-center text-center gap-6">
           <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-200 transform hover:rotate-6 transition-transform duration-500">
-               <Shield className="text-white w-10 h-10" />
-            </div>
             <div>
               <h1 className="text-base md:text-xl font-black text-gray-900 tracking-tighter leading-tight uppercase">
                 FUTBOL 7 LA AMISTAD | SANTA CRUZ DE TENERIFE 
@@ -121,7 +128,7 @@ export default function PublicCalendar() {
             </div>
           </div>
           
-          <div className="absolute top-4 left-4">
+          <div className="absolute top-4 right-4">
             <button 
               onClick={() => {
                 const url = new URL(window.location.href);
