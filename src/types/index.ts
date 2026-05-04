@@ -31,6 +31,11 @@ export interface Team {
   email?: string;
   total_sanctions: number;
   pending_amount: number;
+  available_days?: string[]; // Deprecated
+  available_hours?: string[]; // Deprecated
+  available_slots?: { day: string; hours: string[] }[]; // Specific hours for each day
+  vetoed_fields?: string[];
+  linked_team_id?: string; // ID of another team to force playing on same day/field but different hour
 }
 
 export interface Sanction {
@@ -121,6 +126,19 @@ export interface AccountingTransaction {
   isAutomated: boolean;
   type: 'Ingreso' | 'Gasto';
   created_at: string;
+  tag?: string;
+}
+
+export interface Venue {
+  id: string;
+  name: string;
+  match_price: number;
+  linked_venue_id?: string;
+  is_active?: boolean;
+  available_slots: {
+    day: string; // e.g. "Lunes", "Martes"
+    hours: string[]; // e.g. ["20:30", "21:30"]
+  }[];
 }
 
 export interface VenueRentalCost {
@@ -153,6 +171,7 @@ export interface EconomicSettings {
     type3Months: number;
     seasonMonths: number;
   };
+  tags?: string[];
 }
 
 export interface TeamEconomicStatus {

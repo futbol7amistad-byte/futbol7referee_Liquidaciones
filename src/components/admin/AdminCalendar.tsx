@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useData } from '../../store/DataContext';
+import { toast } from 'sonner';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
 import { Calendar, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, X, ChevronDown, User, ArrowRight, RefreshCw, Shield, Trash2, ChevronLeft, ChevronRight, MessageSquare, GripVertical, FileText, MapPin } from 'lucide-react';
@@ -11,6 +12,7 @@ import { getWhatsAppLink } from '../../utils/whatsapp';
 import { startOfMonth, endOfMonth, eachDayOfInterval, startOfISOWeek, endOfISOWeek, isSameMonth, isSameDay, isWithinInterval, format, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import PublicCalendar from '../PublicCalendar';
+import CalendarGenerator from './CalendarGenerator';
 
 export default function AdminCalendar() {
   const { matches: matchesRaw, referees, teams, importMatches, reassignReferee, clearMatchesInRange, deleteMatch, clearAllMatches, clearMatchesByPeriod, hiddenPeriods, updateMatchStatus, updateMatch, addSanction, settings } = useData();
@@ -33,6 +35,7 @@ export default function AdminCalendar() {
   const [tempMatches, setTempMatches] = useState<any[]>([]);
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showGeneratorModal, setShowGeneratorModal] = useState(false);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -169,7 +172,43 @@ export default function AdminCalendar() {
     }
   };
 
-  const handleDropOnMatch = (matchId: string) => {
+  const handleDropOnMatch = async (e: React.DragEvent, matchId: string) => {
+    e.preventDefault();
+    setDragOverMatchId(null);
+
+    const matchDropType = e.dataTransfer.getData('text/plain');
+    if (matchDropType.startsWith('match-swap:')) {
+      const sourceMatchId = matchDropType.split(':')[1];
+      if (sourceMatchId === matchId) return;
+
+      const sourceMatch = matches.find(m => m.id === sourceMatchId);
+      const targetMatch = matches.find(m => m.id === matchId);
+
+      if (sourceMatch && targetMatch) {
+         try {
+           // Swap field, date, time
+           await Promise.all([
+             updateMatch(sourceMatch.id, {
+               field: targetMatch.field,
+               match_date: targetMatch.match_date,
+               match_time: targetMatch.match_time,
+               day_name: targetMatch.day_name
+             }),
+             updateMatch(targetMatch.id, {
+               field: sourceMatch.field,
+               match_date: sourceMatch.match_date,
+               match_time: sourceMatch.match_time,
+               day_name: sourceMatch.day_name
+             })
+           ]);
+           toast.success('Permuta de partidos realizada correctamente', { id: `swap-${sourceMatchId}-${targetMatch.id}` });
+         } catch (err) {
+           toast.error('Error al realizar la permuta');
+         }
+      }
+      return;
+    }
+
     if (draggingRefereeId) {
       const targetMatch = matches.find(m => m.id === matchId);
       if (targetMatch) {
@@ -190,7 +229,6 @@ export default function AdminCalendar() {
                     
                     setDraggingRefereeId(null);
                     setDraggingOriginMatchId(null);
-                    setDragOverMatchId(null);
                     return;
                 } else {
                     // JUST MOVE: origin gets empty, target gets the ref
@@ -199,7 +237,6 @@ export default function AdminCalendar() {
                     
                     setDraggingRefereeId(null);
                     setDraggingOriginMatchId(null);
-                    setDragOverMatchId(null);
                     return;
                 }
             }
@@ -216,7 +253,6 @@ export default function AdminCalendar() {
           setShowWarningModal(true);
           setDraggingRefereeId(null);
           setDraggingOriginMatchId(null);
-          setDragOverMatchId(null);
           return;
         }
 
@@ -632,7 +668,22 @@ export default function AdminCalendar() {
           const teamBName = getVal(['EquipoB', 'Equipo B', 'Equipo Visitante', 'Visitante']);
           const refereeName = getVal(['Arbitro', 'Árbitro', 'Arbitro ', 'Referee']);
           const field = getVal(['Campo', 'Lugar', 'Pista', 'Cancha', 'Instalación', 'Instalacion', 'Sede']);
-          const competition = getVal(['Categoría', 'Categoria', 'Division', 'División', 'Competicion', 'Competición', 'Grupo']);
+          let competition = getVal(['Categoría', 'Categoria', 'Division', 'División', 'Competicion', 'Competición', 'Grupo']);
+          
+          if (!competition) {
+             const nameToSearch = `${teamAName} ${teamBName}`.toUpperCase();
+             if (nameToSearch.includes('SENIOR+') || nameToSearch.includes('SENIOR +')) {
+               competition = 'SENIOR+';
+             } else if (nameToSearch.includes('SENIOR') || nameToSearch.includes('SENIOR')) {
+               competition = 'SENIOR';
+             } else if (nameToSearch.includes('VETERANOS+35') || nameToSearch.includes('VETERANOS +35') || nameToSearch.includes('+35')) {
+               competition = 'VETERANOS+35';
+             } else if (nameToSearch.includes('MASTER') || nameToSearch.includes('+40')) {
+               competition = 'MASTER+40';
+             } else {
+               competition = round;
+             }
+          }
           const round = getVal(['Jornada', 'Semana', 'Round']);
           const time = getVal(['Hora', 'Horario']);
           const dayNameRaw = getVal(['Dia de la Semana', 'Día de la Semana', 'Dia', 'Día', 'Día Sem.', 'Dia Sem']);
@@ -724,13 +775,9 @@ export default function AdminCalendar() {
     const startStr = format(startDate, 'yyyy-MM-dd');
     const endStr = format(endDate, 'yyyy-MM-dd');
     
-    // Check for conflicts: either by date range or by having the same 'Jornada'
-    const importedRounds = Array.from(new Set(tempMatches.map(m => String(m.match_round).trim().toLowerCase()).filter(Boolean)));
+    // Check for conflicts: only by date range
     const conflicts = matches.filter(m => {
-      const inDateRange = m.match_date >= startStr && m.match_date <= endStr;
-      const mRound = String(m.match_round || '').trim().toLowerCase();
-      const hasSameRound = mRound !== '' && importedRounds.includes(mRound);
-      return inDateRange || hasSameRound;
+      return m.match_date >= startStr && m.match_date <= endStr;
     });
 
     if (conflicts.length > 0) {
@@ -745,26 +792,24 @@ export default function AdminCalendar() {
     const startStr = format(startDate, 'yyyy-MM-dd');
     const endStr = format(endDate, 'yyyy-MM-dd');
     
-    const importedRounds = Array.from(new Set(tempMatches.map(m => String(m.match_round).trim().toLowerCase()).filter(Boolean)));
     const conflicts = matches.filter(m => {
-      const inDateRange = m.match_date >= startStr && m.match_date <= endStr;
-      const mRound = String(m.match_round || '').trim().toLowerCase();
-      const hasSameRound = mRound !== '' && importedRounds.includes(mRound);
-      return inDateRange || hasSameRound;
+      return m.match_date >= startStr && m.match_date <= endStr;
     });
     
-    // Si estamos sustituyendo (hay conflictos), borrar antes
-    if (conflicts.length > 0) {
-        // En vez de clearMatchesInRange, borramos los conflictos encontrados
-        for (const match of conflicts) {
-           await deleteMatch(match.id);
-        }
-    }
+    // Hacemos el borrado e importación de manera atómica (en la misma transacción)
+    // para evitar que si falla la creación, los datos antiguos desaparezcan.
+    const conflictsToDelete = conflicts.map(m => m.id);
     
-    await importMatches(tempMatches, `${startStr}_to_${endStr}`, startStr, endStr);
-    setShowConflictModal(false);
-    setShowSuccessModal(true);
-    setTempMatches([]);
+    try {
+      await importMatches(tempMatches, `${startStr}_to_${endStr}`, startStr, endStr, conflictsToDelete);
+      setShowConflictModal(false);
+      setShowSuccessModal(true);
+      setTempMatches([]);
+    } catch (error: any) {
+      console.error(error);
+      setShowConflictModal(false);
+      alert("Hemos detectado un error al guardar los partidos generados en la base de datos.");
+    }
   };
 
   const handleReassign = (match: Match) => {
@@ -886,13 +931,49 @@ export default function AdminCalendar() {
 
   const selectedRefereeMatches = matches.filter(m => m.referee_id === selectedRefereeId);
 
+  const fixCategories = async () => {
+    let fixedCount = 0;
+    for (const m of matchesRaw) {
+      const compLower = String(m.competition || '').toLowerCase().trim();
+      const needsFixing = !m.competition || /^\d+$/.test(compLower) || compLower.includes('jornada') || compLower === '';
+      
+      if (needsFixing) {
+         const teamAName = m.team_a_name || '';
+         const teamBName = m.team_b_name || '';
+         const nameToSearch = `${teamAName} ${teamBName}`.toUpperCase();
+         
+         let newCat = '';
+         if (nameToSearch.includes('SENIOR+') || nameToSearch.includes('SENIOR +')) {
+            newCat = 'SENIOR+';
+         } else if (nameToSearch.includes('SENIOR')) {
+            newCat = 'SENIOR';
+         } else if (nameToSearch.includes('VETERANOS+35') || nameToSearch.includes('VETERANOS +35') || nameToSearch.includes('+35')) {
+            newCat = 'VETERANOS+35';
+         } else if (nameToSearch.includes('MASTER') || nameToSearch.includes('+40')) {
+            newCat = 'MASTER+40';
+         }
+
+         if (newCat) {
+           await updateMatch(m.id, { competition: newCat });
+           fixedCount++;
+         }
+      }
+    }
+    alert(`Se corrigieron las categorías de ${fixedCount} partidos.`);
+  };
+
   return (
     <div className="space-y-8 pb-12">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-          <Calendar className="w-6 h-6 mr-3 text-blue-600" />
-          Gestión de Calendario
+        <h2 className="text-2xl font-bold text-gray-900 flex items-center justify-between">
+          <div className="flex items-center">
+            <Calendar className="w-6 h-6 mr-3 text-blue-600" />
+            Gestión de Calendario
+          </div>
+          <button onClick={fixCategories} className="px-4 py-2 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg hover:bg-emerald-200">
+             CORREGIR CATEGORÍAS
+          </button>
         </h2>
         <p className="text-gray-500 font-medium">Importa partidos desde Excel y gestiona designaciones arbitrales</p>
       </div>
@@ -946,43 +1027,56 @@ export default function AdminCalendar() {
         )}
       </div>
 
-      {/* Step 2: Upload */}
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
-        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+      {/* Step 2: System */}
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 space-y-6">
+        <h3 className="text-lg font-bold text-gray-900 flex items-center">
           <Upload className="w-5 h-5 mr-2 text-blue-600" />
-          Paso 2: Cargar Calendario Maestro
+          Paso 2: Modelado del Calendario
         </h3>
-        <p className="text-sm text-gray-500 mb-6 font-medium">
-          Sube el fichero .xlsx con las columnas: Jornada, Fecha, Dia de la Semana, Hora, Campo, Categoría, EquipoA, EquipoB y Arbitro
-        </p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Smart Generator */}
+          <div className="border border-indigo-100 bg-indigo-50/30 rounded-3xl p-8 text-center flex flex-col items-center group hover:bg-indigo-50/80 transition-colors">
+              <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                 <Calendar className="w-8 h-8 text-indigo-600" />
+              </div>
+              <h4 className="text-lg font-black text-indigo-900 mb-2">Generador Inteligente (Nuevo)</h4>
+              <p className="text-sm text-indigo-600 font-medium mb-6 px-4">Sube la matriz de partidos y el motor asignará automáticamente fechas, horas y campos respetando los vetos y restricciones perimetrales.</p>
+              <button 
+                 onClick={() => setShowGeneratorModal(true)}
+                 className="mt-auto px-8 py-3 bg-indigo-600 text-white rounded-xl text-sm font-black uppercase tracking-widest shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:-translate-y-0.5 transition-all w-full"
+              >
+                  Abrir Generador
+              </button>
+          </div>
 
-        <div 
-          className={`relative border-2 border-dashed rounded-3xl p-12 text-center transition-all ${
-            dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-400'
-          }`}
-          onDragEnter={handleDrag}
-          onDragLeave={handleDrag}
-          onDragOver={handleDrag}
-          onDrop={handleDrop}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            accept=".xlsx, .xls"
-            onChange={handleChange}
-          />
-          <div className="flex flex-col items-center">
-            <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-4">
-              <Upload className="w-8 h-8 text-blue-600" />
+          {/* Legacy Upload */}
+          <div 
+            className={`border-2 border-dashed rounded-3xl p-8 text-center flex flex-col items-center transition-all ${
+              dragActive ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-blue-400 bg-white'
+            }`}
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept=".xlsx, .xls"
+              onChange={handleChange}
+            />
+            <div className="w-16 h-16 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-center mb-4">
+              <FileSpreadsheet className="w-8 h-8 text-slate-500" />
             </div>
-            <p className="text-lg font-bold text-gray-900 mb-1">Arrastra el archivo Excel aquí</p>
-            <p className="text-sm text-gray-400 font-medium mb-4">o haz clic para seleccionar</p>
+            <h4 className="text-lg font-black text-slate-900 mb-2">Carga Tradicional (Legado)</h4>
+            <p className="text-sm text-slate-500 font-medium mb-6 px-4">Sube un Excel que ya contenga las columnas: Jornada, Fecha, Hora, Campo y Equipos.</p>
             <button 
               onClick={() => fileInputRef.current?.click()}
-              className="px-6 py-2 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors shadow-sm"
+              className="mt-auto px-8 py-3 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-black uppercase tracking-widest shadow-sm hover:border-slate-300 hover:-translate-y-0.5 transition-all w-full"
             >
-              Seleccionar Archivo
+              Seleccionar Excel
             </button>
           </div>
         </div>
@@ -1272,18 +1366,25 @@ export default function AdminCalendar() {
                             setDragOverMatchId(m.id);
                           }}
                           onDragLeave={() => setDragOverMatchId(null)}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            handleDropOnMatch(m.id);
-                          }}
+                          onDrop={(e) => handleDropOnMatch(e, m.id)}
                           className={`
                             text-xs font-medium text-gray-600 transition-all duration-200
                             ${dragOverMatchId === m.id ? 'bg-blue-50 scale-[1.01] shadow-inner ring-2 ring-blue-200 z-10' : 'hover:bg-gray-50'}
                           `}
                         >
                           <td className="px-4 py-3">
-                            <div className="flex items-center">
-                              <span className="text-[10px] text-gray-400 mr-2 font-bold w-6">#{index + 1}</span>
+                            <div className="flex items-center group/grip">
+                              <div 
+                                draggable 
+                                onDragStart={(e) => {
+                                  e.dataTransfer.setData('text/plain', `match-swap:${m.id}`);
+                                }}
+                                className="mr-2 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500" 
+                                title="Arrastrar para permutar con otro partido"
+                              >
+                                <GripVertical className="w-4 h-4" />
+                              </div>
+                              <span className="text-[10px] text-gray-400 mr-2 font-bold w-4">#{index + 1}</span>
                               {m.match_round}
                             </div>
                           </td>
@@ -2053,6 +2154,32 @@ export default function AdminCalendar() {
               </button>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showGeneratorModal && (
+          <CalendarGenerator
+            teams={teams}
+            onGenerate={(generatedMatches) => {
+               setTempMatches(generatedMatches);
+               
+               // auto-detect dates for conflicts
+               if (generatedMatches.length > 0) {
+                 const dates = generatedMatches.map((m: any) => new Date(m.match_date)).filter((d: any) => !isNaN(d.getTime()));
+                 if (dates.length > 0) {
+                   const minDate = new Date(Math.min(...dates.map((d: any) => d.getTime())));
+                   const maxDate = new Date(Math.max(...dates.map((d: any) => d.getTime())));
+                   setStartDate(minDate);
+                   setEndDate(maxDate);
+                   setCurrentMonth(minDate);
+                 }
+               }
+
+               setShowGeneratorModal(false);
+            }}
+            onCancel={() => setShowGeneratorModal(false)}
+          />
         )}
       </AnimatePresence>
     </div>

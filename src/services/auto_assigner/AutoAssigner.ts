@@ -78,8 +78,11 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
       if (!ref.preferences?.partner_referee_id) return bonus;
       
       matchesToAssign.forEach(m => {
-          const mFieldConfig = session.venueCosts?.find((v: any) => v.venue_name === m.field);
-          if (mFieldConfig?.is_double) {
+          // Find if this venue has a linked venue
+          const mVenue = session.venues?.find(v => v.name === m.field);
+          const hasLinkedVenue = !!mVenue?.linked_venue_id || session.venues?.some(v => v.linked_venue_id === mVenue?.id);
+          
+          if (hasLinkedVenue) {
               // Buscar todos los partidos asignados ACTUALMENTE (en sesión y en results) para el compañero en ese día
               const partnerId = ref.preferences!.partner_referee_id;
               
@@ -91,8 +94,12 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
               const partnerMatchesSameDay = allAssigned.filter(pm => pm.match_date === m.match_date);
               
               for (const pm of partnerMatchesSameDay) {
-                  const pFieldConfig = session.venueCosts?.find((v: any) => v.venue_name === pm.field);
-                  if (pFieldConfig?.is_double && pm.field !== m.field) {
+                  const pVenue = session.venues?.find(v => v.name === pm.field);
+                  // They are linked if mVenue links to pVenue OR pVenue links to mVenue
+                  const isLinked = (mVenue?.linked_venue_id && mVenue.linked_venue_id === pVenue?.id) || 
+                                   (pVenue?.linked_venue_id && pVenue.linked_venue_id === mVenue?.id);
+
+                  if (isLinked) {
                       bonus += 1000000; // Bono masivo
                       if (pm.match_time === m.match_time) {
                           bonus += 5000000; // Bono súper masivo por ser a la misma hora en la otra pista

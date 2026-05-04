@@ -14,6 +14,7 @@ import AdminLayoutContainer from './components/admin/AdminLayoutContainer';
 import AdminDashboard from './components/admin/AdminDashboard';
 import AdminReferees from './components/admin/AdminReferees';
 import AdminTeams from './components/admin/AdminTeams';
+import AdminVenues from './components/admin/AdminVenues';
 import AdminCalendar from './components/admin/AdminCalendar';
 import AdminUnpaid from './components/admin/AdminUnpaid';
 import AdminPayments from './components/admin/AdminPayments';
@@ -29,6 +30,8 @@ import RefereeLayout from './components/referee/RefereeLayout';
 import RefereeMatches from './components/referee/RefereeMatches';
 import PublicCalendar from './components/PublicCalendar';
 import Footer from './components/Footer';
+
+import IntroScreen from './components/IntroScreen';
 
 function PrivateRoute({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: Role[] }) {
   const { user } = useAuth();
@@ -63,8 +66,12 @@ function AppRoutes() {
 
   return (
     <Routes>
+      <Route path="/" element={
+         user ? <Navigate to={user.role === 'referee' ? '/referee' : '/admin'} /> : <Navigate to="/login" replace />
+      } />
+
       <Route path="/login" element={
-        <div className="min-h-screen flex flex-col w-full">
+        <div className="min-h-screen flex flex-col w-full bg-slate-50">
           <div className="flex-grow flex items-center justify-center w-full">
             {user ? <Navigate to={user.role === 'referee' ? '/referee' : '/admin'} /> : <Login />}
           </div>
@@ -79,6 +86,7 @@ function AppRoutes() {
               <Route path="/" element={<AdminDashboard />} />
               <Route path="/referees" element={<AdminReferees />} />
               <Route path="/teams" element={<AdminTeams />} />
+              <Route path="/venues" element={<RoleGuard allowedRoles={['admin']}><AdminVenues /></RoleGuard>} />
               <Route path="/payments" element={<AdminPayments />} />
               <Route path="/economic" element={<AdminEconomic />} />
               <Route path="/settlements" element={<RoleGuard allowedRoles={['admin']}><AdminSettlements /></RoleGuard>} />

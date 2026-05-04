@@ -90,19 +90,20 @@ export default function RefereeMatches() {
     .filter(p => todayMatches.some(m => m.id === p.match_id) && p.is_paid)
     .reduce((sum, p) => sum + p.amount, 0);
 
-  const weekMatches = myMatches.filter(m => m.status === 'Liquidado'); 
+  const weekMatches = filteredMatches.filter(m => m.status === 'Liquidado'); 
   const collectedWeek = uniquePayments
     .filter(p => weekMatches.some(m => m.id === p.match_id) && p.is_paid)
     .reduce((sum, p) => sum + p.amount, 0);
 
-  const pendingMatches = myMatches.filter(m => m.status !== 'Liquidado').length;
+  const pendingMatches = filteredMatches.filter(m => m.status !== 'Liquidado').length;
+
 
   return (
     <div className="space-y-6 pb-10">
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-3">
         <StatCardMobile title="Hoy" value={collectedToday} icon={TrendingUp} color="emerald" />
-        <StatCardMobile title="Semana" value={collectedWeek} icon={TrendingUp} color="blue" />
+        <StatCardMobile title="Periodo" value={collectedWeek} icon={TrendingUp} color="blue" />
         <StatCardMobile title="Pend." value={pendingMatches} icon={Clock} color="amber" />
       </div>
 

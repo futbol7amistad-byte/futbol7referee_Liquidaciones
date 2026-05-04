@@ -186,7 +186,8 @@ export default function AdminSettlements() {
                 accountId,
                 description: `Pagos Arbitros periodo (${formattedStartDate} al ${formattedEndDate})`,
                 isAutomated: false,
-                type: 'Gasto'
+                type: 'Gasto',
+                tag: 'ARBITROS'
             });
             toast.success('Gasto de árbitros registrado en el Libro Diario');
             setConfirmModalType(null);
@@ -211,7 +212,8 @@ export default function AdminSettlements() {
                 accountId,
                 description: `Alquiler campos periodo (${formattedStartDate} al ${formattedEndDate})`,
                 isAutomated: false,
-                type: 'Gasto'
+                type: 'Gasto',
+                tag: 'INSTALACIONES'
             });
             toast.success('Gasto de campos registrado en el Libro Diario');
             setConfirmModalType(null);

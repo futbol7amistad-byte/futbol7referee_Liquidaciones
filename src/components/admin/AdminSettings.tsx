@@ -3,7 +3,7 @@ import { useData } from '../../store/DataContext';
 import { useSeason } from '../../contexts/SeasonContext';
 import { db } from '../../lib/firebase';
 import { doc, writeBatch, collection, setDoc } from 'firebase/firestore';
-import { Settings, Sun, Moon, Upload, Trash2, CheckCircle2, RefreshCw, HardDriveDownload, CalendarClock, UploadCloud, AlertTriangle } from 'lucide-react';
+import { Settings, Sun, Moon, Upload, Trash2, CheckCircle2, RefreshCw, HardDriveDownload, CalendarClock, UploadCloud, AlertTriangle, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { fileToBase64 } from '../../utils/imageUtils';
 
@@ -171,6 +171,33 @@ export default function AdminSettings() {
           <RefreshCw className="w-3.5 h-3.5 mr-2" />
           Recargar
         </button>
+      </div>
+
+      {/* Control de Gastos */}
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
+        <div className="flex items-center gap-3 mb-4">
+           <div className="p-3 bg-blue-50 rounded-xl">
+             <ExternalLink className="w-5 h-5 text-blue-600" />
+           </div>
+           <div>
+             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Control de Gasto</h3>
+             <p className="text-xs text-gray-500 font-medium">Revisa y supervisa la facturación y uso de la infraestructura del sistema.</p>
+           </div>
+        </div>
+        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+           <p className="text-sm text-slate-700">
+             Para acceder al panel de control del gasto por uso, pincha{' '}
+             <a 
+               href="https://console.cloud.google.com/billing/012895-F24538-284826?project=futbol7amistad-prod" 
+               target="_blank" 
+               rel="noopener noreferrer"
+               className="text-blue-600 font-bold hover:underline"
+             >
+               AQUÍ
+             </a>
+             .
+           </p>
+        </div>
       </div>
 
       {/* Backup and Data Security */}

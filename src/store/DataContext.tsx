@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Match, MatchPayment, Referee, Team, CashDelivery, Sanction, AccountingAccount, AccountingTransaction, EconomicSettings, TeamEconomicStatus, RefereeAdvance } from '../types';
+import { Match, MatchPayment, Referee, Team, CashDelivery, Sanction, AccountingAccount, AccountingTransaction, EconomicSettings, TeamEconomicStatus, RefereeAdvance, Venue } from '../types';
 import { useSeason } from '../contexts/SeasonContext';
+import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, setDoc, writeBatch, getDocs, getDoc, orderBy, where } from 'firebase/firestore';
 
@@ -16,6 +17,12 @@ interface DataContextType {
   transactions: AccountingTransaction[];
   economicSettings: EconomicSettings;
   teamEconomicStatus: TeamEconomicStatus[];
+  venues: Venue[];
+  
+  addVenue: (venue: Omit<Venue, 'id'>) => Promise<string>;
+  updateVenue: (id: string, updates: Partial<Venue>) => Promise<void>;
+  deleteVenue: (id: string) => Promise<void>;
+
   addPayment: (payment: Omit<MatchPayment, 'id' | 'created_at'>) => Promise<void>;
   addDelivery: (delivery: Omit<CashDelivery, 'id' | 'created_at'>) => void;
   addRefereeAdvance: (advance: Omit<RefereeAdvance, 'id' | 'created_at'>) => void;
@@ -26,7 +33,7 @@ interface DataContextType {
   addSanction: (sanction: Omit<Sanction, 'id' | 'created_at' | 'is_paid'>) => void;
   markSanctionAsPaid: (id: string) => void;
   clearSanctions: () => void;
-  importMatches: (matches: any[], period: string, startDate: string, endDate: string) => void;
+  importMatches: (matches: any[], period: string, startDate: string, endDate: string, conflictsToDelete?: string[]) => Promise<void>;
   reassignReferee: (matchId: string, refereeId: string) => void;
   clearMatchesInRange: (startDate: string, endDate: string) => void;
   clearMatchesByPeriod: (period: string) => void;
@@ -81,6 +88,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [refereeAdvances, setRefereeAdvances] = useState<RefereeAdvance[]>([]);
   const [accounts, setAccounts] = useState<AccountingAccount[]>([]);
   const [transactions, setTransactions] = useState<AccountingTransaction[]>([]);
+  const [venues, setVenues] = useState<Venue[]>([]);
   const [economicSettings, setEconomicSettings] = useState<EconomicSettings>({
     registration_fee: 0,
     license_cost_type1: 0,
@@ -101,6 +109,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>({ logo_url: '', season: '2025-2026' });
   const [error, setError] = useState<string | null>(null);
 
+  const { user } = useAuth();
+  
   // Load settings once
   useEffect(() => {
     if (!currentSeason) return;
@@ -116,20 +126,23 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    const unsubEconomicSettings = onSnapshot(doc(db, 'seasons', currentSeason.id, 'economic_settings', 'config'), 
-      (doc) => {
-        if (doc.exists()) {
-          setEconomicSettings(doc.data() as EconomicSettings);
-        }
-      },
-      (err) => console.error("Error loading economic settings:", err)
-    );
+    let unsubEconomicSettings = () => {};
+    if (user && ['admin', 'collaborator'].includes(user.role)) {
+      unsubEconomicSettings = onSnapshot(doc(db, 'seasons', currentSeason.id, 'economic_settings', 'config'), 
+        (doc) => {
+          if (doc.exists()) {
+            setEconomicSettings(doc.data() as EconomicSettings);
+          }
+        },
+        (err) => console.error("Error loading economic settings:", err)
+      );
+    }
 
     return () => {
       unsub();
       unsubEconomicSettings();
     };
-  }, [currentSeason]);
+  }, [currentSeason, user]);
 
   const [hiddenPeriods, setHiddenPeriods] = useState<string[]>([]);
 
@@ -141,52 +154,70 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (err.message.toLowerCase().includes('quota') || err.message.toLowerCase().includes('resource-exhausted')) {
         setError(`Límite diario de lecturas superado: ${err.message}. Tus datos ESTÁN A SALVO. Si acabas de actualizar a Blaze, puede tardar unos minutos en reflejarse.`);
       } else if (err.message.toLowerCase().includes('permission-denied')) {
-        setError("Error de permisos: No tienes acceso a los datos de la temporada actual.");
+        // Softly handle permission denied (likely caused by not being logged in and requesting protected collections)
+        console.warn("Error de permisos: No tienes acceso a ciertos datos.");
       }
     };
 
     const seasonRef = doc(db, 'seasons', currentSeason.id);
 
+    // Every user needs matches, teams, venues, and referees (for calendar/basic view)
     const unsubMatches = onSnapshot(collection(seasonRef, 'matches'), 
       (snapshot) => setMatches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Match))),
-      handleError
-    );
-    const unsubPayments = onSnapshot(collection(seasonRef, 'payments'), 
-      (snapshot) => setPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MatchPayment))),
-      handleError
-    );
-    const unsubReferees = onSnapshot(collection(seasonRef, 'referees'), 
-      (snapshot) => setReferees(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Referee))),
       handleError
     );
     const unsubTeams = onSnapshot(collection(seasonRef, 'teams'), 
       (snapshot) => setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team))),
       handleError
     );
-    const unsubDeliveries = onSnapshot(collection(seasonRef, 'deliveries'), 
-      (snapshot) => setDeliveries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CashDelivery))),
+    const unsubVenues = onSnapshot(collection(seasonRef, 'venues'), 
+      (snapshot) => setVenues(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Venue))),
       handleError
     );
-    const unsubSanctions = onSnapshot(collection(seasonRef, 'sanctions'), 
-      (snapshot) => setSanctions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sanction))),
+    const unsubReferees = onSnapshot(collection(seasonRef, 'referees'), 
+      (snapshot) => setReferees(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Referee))),
       handleError
     );
-    const unsubRefereeAdvances = onSnapshot(collection(seasonRef, 'referee_advances'),
-      (snapshot) => setRefereeAdvances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RefereeAdvance))),
-      handleError
-    );
-    const unsubAccounts = onSnapshot(collection(seasonRef, 'accounting_accounts'), 
-      (snapshot) => setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccountingAccount))),
-      handleError
-    );
-    const unsubTransactions = onSnapshot(query(collection(seasonRef, 'accounting_transactions'), orderBy('date', 'desc')), 
-      (snapshot) => setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccountingTransaction))),
-      handleError
-    );
-    const unsubTeamEconomic = onSnapshot(collection(seasonRef, 'team_economic_status'), 
-      (snapshot) => setTeamEconomicStatus(snapshot.docs.map(doc => ({ team_id: doc.id, ...doc.data() } as TeamEconomicStatus))),
-      handleError
-    );
+
+    // Administrative collections only loaded for admins/collaborators
+    let unsubPayments = () => {};
+    let unsubDeliveries = () => {};
+    let unsubSanctions = () => {};
+    let unsubRefereeAdvances = () => {};
+    let unsubAccounts = () => {};
+    let unsubTransactions = () => {};
+    let unsubTeamEconomic = () => {};
+
+    if (user && ['admin', 'collaborator'].includes(user.role)) {
+      unsubPayments = onSnapshot(collection(seasonRef, 'payments'), 
+        (snapshot) => setPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MatchPayment))),
+        handleError
+      );
+      unsubDeliveries = onSnapshot(collection(seasonRef, 'deliveries'), 
+        (snapshot) => setDeliveries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CashDelivery))),
+        handleError
+      );
+      unsubSanctions = onSnapshot(collection(seasonRef, 'sanctions'), 
+        (snapshot) => setSanctions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sanction))),
+        handleError
+      );
+      unsubRefereeAdvances = onSnapshot(collection(seasonRef, 'referee_advances'),
+        (snapshot) => setRefereeAdvances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RefereeAdvance))),
+        handleError
+      );
+      unsubAccounts = onSnapshot(collection(seasonRef, 'accounting_accounts'), 
+        (snapshot) => setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccountingAccount))),
+        handleError
+      );
+      unsubTransactions = onSnapshot(query(collection(seasonRef, 'accounting_transactions'), orderBy('date', 'desc')), 
+        (snapshot) => setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccountingTransaction))),
+        handleError
+      );
+      unsubTeamEconomic = onSnapshot(collection(seasonRef, 'team_economic_status'), 
+        (snapshot) => setTeamEconomicStatus(snapshot.docs.map(doc => ({ team_id: doc.id, ...doc.data() } as TeamEconomicStatus))),
+        handleError
+      );
+    }
 
     return () => {
       unsubMatches();
@@ -199,8 +230,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       unsubAccounts();
       unsubTransactions();
       unsubTeamEconomic();
+      unsubVenues();
     };
-  }, [currentSeason]);
+  }, [currentSeason, user]);
 
   const syncMatchAccounting = async (matchId: string) => {
     if (!currentSeason) return;
@@ -297,7 +329,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
               relatedMatchId: matchId,
               isAutomated: true,
               type: 'Ingreso',
-              created_at: new Date().toISOString()
+              created_at: new Date().toISOString(),
+              tag: 'LIGA REGULAR'
             });
           }
         }
@@ -404,7 +437,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setTeams(prev => prev.map(t => ({ ...t, total_sanctions: 0, pending_amount: 0 })));
   };
 
-  const importMatches = async (newMatches: any[], period: string, startDate: string, endDate: string): Promise<void> => {
+  const importMatches = async (newMatches: any[], period: string, startDate: string, endDate: string, conflictsToDelete: string[] = []): Promise<void> => {
     if (!currentSeason) return;
     const generateInitialPassword = () => {
       const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -460,22 +493,30 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     for (const m of newMatches.filter(m => String(m.team_a_name || '').trim() && String(m.team_b_name || '').trim())) {
         const teamAId = teamsToMap.find(t => t.name.toLowerCase() === String(m.team_a_name || '').trim().toLowerCase())?.id || 'unknown';
         const teamBId = teamsToMap.find(t => t.name.toLowerCase() === String(m.team_b_name || '').trim().toLowerCase())?.id || 'unknown';
-        const refereeId = ''; // Forzar vacío para que el Auto-Asignador actúe
+        let refereeId = '';
+        if (m.referee_name && m.referee_name.trim() !== 'SIN ASIGNAR') {
+             refereeId = refsToMap.find(r => r.name.toLowerCase() === String(m.referee_name).trim().toLowerCase())?.id || '';
+        }
 
         batch.set(doc(collection(db, 'seasons', currentSeason.id, 'matches')), {
-            match_round: m.match_round,
-            match_date: m.match_date,
-            match_time: m.match_time,
-            day_name: m.day_name,
-            field: m.field,
-            competition: m.competition,
+            match_round: m.match_round || '',
+            match_date: m.match_date || '',
+            match_time: m.match_time || '',
+            day_name: m.day_name || '',
+            field: m.field || '',
+            competition: m.category || m.competition || '',
             team_a_id: teamAId,
             team_b_id: teamBId,
             referee_id: refereeId,
             status: 'Programado',
-            period: period,
+            period: period || '',
             level: Number(m.level) || 3
         });
+    }
+
+    // 4. Delete existing conflicted matches
+    for (const id of conflictsToDelete) {
+        batch.delete(doc(db, 'seasons', currentSeason.id, 'matches', id));
     }
 
     await batch.commit();
@@ -539,6 +580,22 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const clearMatchesByPeriod = (period: string) => {
     hidePeriod(period);
+  };
+
+  const addVenue = async (venue: Omit<Venue, 'id'>) => {
+    if (!currentSeason) throw new Error("No season active");
+    const docRef = await addDoc(collection(db, 'seasons', currentSeason.id, 'venues'), venue);
+    return docRef.id;
+  };
+
+  const updateVenue = async (id: string, updates: Partial<Venue>) => {
+    if (!currentSeason) return;
+    await updateDoc(doc(db, 'seasons', currentSeason.id, 'venues', id), updates);
+  };
+
+  const deleteVenue = async (id: string) => {
+    if (!currentSeason) return;
+    await deleteDoc(doc(db, 'seasons', currentSeason.id, 'venues', id));
   };
 
   const updateSettings = async (newSettings: Partial<AppSettings>) => {
@@ -637,8 +694,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   return (
     <DataContext.Provider value={{ 
       matches, payments, referees, teams, deliveries, sanctions, refereeAdvances,
-      accounts, transactions, economicSettings, teamEconomicStatus,
+      accounts, transactions, economicSettings, teamEconomicStatus, venues,
       assignmentResults, setAssignmentResults,
+      addVenue, updateVenue, deleteVenue,
       addPayment, addDelivery, addRefereeAdvance, deleteRefereeAdvance, addReferee, updateReferee, deleteReferee,
       addSanction, markSanctionAsPaid, clearSanctions,
       importMatches, reassignReferee, clearMatchesInRange, clearMatchesByPeriod, deleteMatch, clearAllMatches, addTeam, updateTeam,

@@ -11,7 +11,7 @@ import { formatDateDisplay } from '../../utils/formatters';
 
 export default function AdminAutoAssigner() {
   const { currentSeason } = useSeason();
-  const { matches: matchesRaw, referees, teams, assignmentResults, setAssignmentResults, hiddenPeriods, settings, updateSettings } = useData();
+  const { matches: matchesRaw, referees, teams, assignmentResults, setAssignmentResults, hiddenPeriods, settings, updateSettings, venues } = useData();
   const [loading, setLoading] = useState(false);
   const [seed, setSeed] = useState(0);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
@@ -224,7 +224,8 @@ export default function AdminAutoAssigner() {
         weeklySlots: Object.keys(effectiveWeeklySlots).length > 0 || inactiveRefs.length > 0 ? effectiveWeeklySlots : undefined,
         mandatoryDays: Object.keys(mandatoryDays).length > 0 ? mandatoryDays : undefined,
         forceReassignAll,
-        venueCosts: settings.venue_costs
+        venueCosts: settings.venue_costs,
+        venues: venues
     };
     const assignments = runAutoAssignment(session, isRetry ? newSeed : seed);
     setAssignmentResults(assignments);

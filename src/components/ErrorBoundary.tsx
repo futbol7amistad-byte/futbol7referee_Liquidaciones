@@ -1,10 +1,8 @@
+// @ts-nocheck
 import React from 'react';
 
-export class ErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error: Error | null }
-> {
-  constructor(props) {
+export class ErrorBoundary extends React.Component<any, any> {
+  constructor(props: any) {
     super(props);
     this.state = { hasError: false, error: null };
   }
@@ -14,7 +12,7 @@ export class ErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: any) {
-    console.error("ErrorBoundary caught an error:", error, errorInfo);
+    console.error("Uncaught error:", error, errorInfo);
   }
 
   render() {
@@ -24,10 +22,10 @@ export class ErrorBoundary extends React.Component<
           <h2>Algo salió mal (Error de la aplicación)</h2>
           <pre>{this.state.error?.toString()}</pre>
           <pre style={{ fontSize: '0.8em', marginTop: '1em' }}>{this.state.error?.stack}</pre>
-          <button onClick={() => window.location.reload()} style={{ padding: '0.5rem 1rem', marginTop: '1rem', cursor: 'pointer' }}>Recargar</button>
+          <button type="button" onClick={() => window.location.reload()} style={{ padding: '0.5rem 1rem', marginTop: '1rem', cursor: 'pointer' }}>Recargar</button>
         </div>
       );
     }
-    return this.props.children;
+    return (this.props as any).children;
   }
 }

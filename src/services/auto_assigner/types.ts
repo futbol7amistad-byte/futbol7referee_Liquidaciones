@@ -11,6 +11,7 @@ export interface AssignmentSession {
   mandatoryDays?: Record<string, string[]>; // refereeId -> ['Lunes', 'Miércoles']
   forceReassignAll?: boolean;
   venueCosts?: any[]; // Para instalaciones múltiples
+  venues?: import('../../types').Venue[];
 }
 
 export interface AssignmentResult {

@@ -257,8 +257,8 @@ function RefereeModal({ referee, onClose, onSave }: { referee: Referee | null, o
     disponibilidad: referee?.disponibilidad || { Lunes: [], Martes: [], Miercoles: [], Jueves: [] }
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { teams, matches, referees } = useData(); // Necesitamos los equipos y partidos
-  const campos = [...new Set(matches.map(m => m.field).filter(Boolean))].sort();
+  const { teams, matches, referees, venues } = useData(); 
+  const campos = venues.length > 0 ? venues.map(v => v.name).sort() : [...new Set(matches.map(m => m.field).filter(Boolean))].sort();
 
   const generatePassword = () => {
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';

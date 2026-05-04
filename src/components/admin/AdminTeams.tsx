@@ -433,13 +433,57 @@ function SanctionForm({ onCancel, onSave }: { onCancel: () => void, onSave: (dat
 }
 
 function TeamModalForm({ team, onSave, onCancel }: { team: Team | null, onSave: (data: any) => void, onCancel: () => void }) {
+  const { teams, venues } = useData();
   const [name, setName] = useState(team?.name || '');
   const [delegate, setDelegate] = useState(team?.delegate || '');
   const [phone, setPhone] = useState(team?.contact_phone || '');
   const [email, setEmail] = useState(team?.email || '');
+  
+  // Constraints
+  const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves'];
+  const [availableSlots, setAvailableSlots] = useState<{day: string, hours: string[]}[]>(
+    team?.available_slots || DAYS.map(day => ({
+        day, 
+        hours: (team?.available_days?.includes(day) || !team?.available_days) && team?.available_hours 
+          ? team.available_hours 
+          : ['20:30', '21:30']
+    }))
+  );
+  
+  // Vetoed fields (store venue IDs)
+  const [vetoedFields, setVetoedFields] = useState<string[]>(team?.vetoed_fields || []);
+  const [linkedTeamId, setLinkedTeamId] = useState<string>(team?.linked_team_id || '');
+
+  const toggleHourForDay = (day: string, hour: string) => {
+    setAvailableSlots(prev => {
+      const slots = [...prev];
+      const slotIndex = slots.findIndex(s => s.day === day);
+      let daySlot;
+      if (slotIndex === -1) {
+        daySlot = { day, hours: [] };
+        slots.push(daySlot);
+      } else {
+        daySlot = { ...slots[slotIndex] };
+        slots[slotIndex] = daySlot;
+      }
+      
+      if (daySlot.hours.includes(hour)) {
+        daySlot.hours = daySlot.hours.filter(h => h !== hour);
+      } else {
+        daySlot.hours = [...daySlot.hours, hour].sort();
+      }
+      return slots;
+    });
+  };
+
+  const toggleVetoedField = (venueName: string) => {
+    setVetoedFields(prev => 
+      prev.includes(venueName) ? prev.filter(name => name !== venueName) : [...prev, venueName]
+    );
+  };
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-8 space-y-6 max-h-[80vh] overflow-y-auto custom-scrollbar">
       <div className="text-center mb-8">
         <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight mb-2">
           {team ? 'Editar Equipo' : 'Nuevo Equipo'}
@@ -490,9 +534,84 @@ function TeamModalForm({ team, onSave, onCancel }: { team: Team | null, onSave: 
             placeholder="Correo electrónico"
           />
         </div>
+
+        {/* RESTRICTIONS */}
+        <div className="pt-4 border-t border-slate-100">
+           <h4 className="text-[12px] font-black text-indigo-600 uppercase tracking-widest mb-4 px-1">Restricciones de Calendario</h4>
+           
+           <div className="space-y-4">
+              <div className="space-y-4">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Disponibilidad de Horarios</label>
+                <div className="space-y-2">
+                  {DAYS.map(day => {
+                    const daySlot = availableSlots?.find(s => s.day === day) || { hours: [] };
+                    return (
+                      <div key={day} className="border border-slate-200 p-3 rounded-xl bg-slate-50">
+                        <div className="font-bold text-slate-800 mb-2">{day}</div>
+                        <div className="flex flex-wrap gap-2">
+                          {['20:30', '21:30'].map(hour => (
+                            <button
+                              key={`${day}-${hour}`}
+                              type="button"
+                              onClick={() => toggleHourForDay(day, hour)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                daySlot.hours.includes(hour)
+                                  ? 'bg-purple-600 text-white shadow-sm'
+                                  : 'bg-white border border-slate-200 text-slate-500 hover:border-purple-600 hover:text-purple-600'
+                              }`}
+                            >
+                              {hour}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Instalaciones / Campos Vetados</label>
+                {venues.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {venues.map(venue => (
+                      <button
+                        key={venue.id}
+                        type="button"
+                        onClick={() => toggleVetoedField(venue.name)}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
+                          vetoedFields.includes(venue.name)
+                            ? 'bg-rose-50 border border-rose-200 text-rose-600 shadow-sm'
+                            : 'bg-slate-50 border border-slate-100 text-slate-500 hover:bg-slate-100'
+                        }`}
+                      >
+                        {venue.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic bg-slate-50 p-4 rounded-xl border border-slate-100">No hay instalaciones registradas en el sistema. Configúralas en la sección "Instalaciones".</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Vincular con Equipo (Mismo día/campo, distinta hora)</label>
+                <select
+                  className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-black text-slate-900 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
+                  value={linkedTeamId}
+                  onChange={(e) => setLinkedTeamId(e.target.value)}
+                >
+                  <option value="">-- Ninguno --</option>
+                  {teams.filter(t => t.id !== team?.id).map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+           </div>
+        </div>
       </div>
 
-      <div className="flex gap-4 pt-4">
+      <div className="flex gap-4 pt-4 sticky bottom-0 bg-white shadow-[0_-10px_20px_white]">
         <button
           type="button"
           onClick={onCancel}
@@ -502,7 +621,12 @@ function TeamModalForm({ team, onSave, onCancel }: { team: Team | null, onSave: 
         </button>
         <button
           type="button"
-          onClick={() => onSave({ name, delegate, contact_phone: phone, email })}
+          onClick={() => onSave({ 
+            name, delegate, contact_phone: phone, email, 
+            available_slots: availableSlots,
+            vetoed_fields: vetoedFields,
+            linked_team_id: linkedTeamId
+          })}
           className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95"
         >
           Guardar Equipo

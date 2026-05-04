@@ -39,6 +39,62 @@ import { getWhatsAppLink } from '../../utils/whatsapp';
 
 type EconomicTab = 'dashboard' | 'journal' | 'summary' | 'teams' | 'accounts' | 'config' | 'budget';
 
+const DEFAULT_TAGS = ['AEMF', 'NACIONAL F7', 'NACIONAL FS', 'NACIONAL F7+35', 'ARBITROS', 'INSTALACIONES', 'EUROPEO EMF', 'MUNDIAL WMF', 'NACIONAL F6', 'SUMINISTROS', 'ARRENDAMIENTOS', 'VOLUNTARIOS', 'LIGA REGULAR'];
+
+export const getTagColor = (tag: string) => {
+  if (!tag) return { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200' };
+  
+  let hash = 0;
+  for (let i = 0; i < tag.length; i++) {
+    hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  const colors = [
+    { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+    { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+    { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' }, 
+    { bg: 'bg-yellow-50', text: 'text-yellow-800', border: 'border-yellow-200' },
+    { bg: 'bg-lime-50', text: 'text-lime-700', border: 'border-lime-200' },
+    { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+    { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+    { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200' },
+    { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
+    { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200' },
+    { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+    { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200' },
+    { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200' },
+    { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+    { bg: 'bg-fuchsia-50', text: 'text-fuchsia-700', border: 'border-fuchsia-200' },
+    { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200' },
+    { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
+    { bg: 'bg-stone-50', text: 'text-stone-700', border: 'border-stone-200' },
+    { bg: 'bg-neutral-50', text: 'text-neutral-700', border: 'border-neutral-200' },
+  ];
+  
+  const predefined: Record<string, number> = {
+    'AEMF': 10,
+    'NACIONAL F7': 6,
+    'NACIONAL FS': 1,
+    'NACIONAL F7+35': 13,
+    'ARBITROS': 18,
+    'INSTALACIONES': 17,
+    'EUROPEO EMF': 4,
+    'MUNDIAL WMF': 8,
+    'NACIONAL F6': 15,
+    'SUMINISTROS': 16,
+    'ARRENDAMIENTOS': 0,
+    'VOLUNTARIOS': 2,
+    'LIGA REGULAR': 11,
+  };
+
+  const normalizedTag = tag.trim().toUpperCase();
+  if (predefined[normalizedTag] !== undefined) {
+      return colors[predefined[normalizedTag]];
+  }
+
+  return colors[Math.abs(hash) % colors.length];
+};
+
 export default function AdminEconomic() {
   const { user } = useAuth();
   const { 
@@ -151,11 +207,12 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
   const [isProcessing, setIsProcessing] = useState(false);
   
   const [dateRange, setDateRange] = useState({
-    start: format(new Date(new Date().getFullYear() - (new Date().getMonth() < 8 ? 1 : 0), 8, 10), 'yyyy-MM-dd'),
+    start: format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'),
     end: format(new Date(), 'yyyy-MM-dd')
   });
   const [sortBy, setSortBy] = useState<'date' | 'account'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [tagFilter, setTagFilter] = useState<string>('');
 
   const uniquePeriods = Array.from(new Set(matches.map((m: any) => m.period).filter(Boolean))) as string[];
 
@@ -186,7 +243,8 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
             accountId: account.id,
             description: `Gasto Fijo Mensual: Arrendamiento Sede Social (${monthName})`,
             isAutomated: true,
-            type: 'Gasto'
+            type: 'Gasto',
+            tag: 'ARRENDAMIENTOS'
           });
           count++;
         }
@@ -202,7 +260,8 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
             accountId: account.id,
             description: `Gasto Fijo Mensual: Voluntario Administrativo (${monthName})`,
             isAutomated: true,
-            type: 'Gasto'
+            type: 'Gasto',
+            tag: 'VOLUNTARIOS'
           });
           count++;
         }
@@ -218,7 +277,8 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
             accountId: account.id,
             description: `Gasto Fijo Mensual: Mantenimiento MyGol (${monthName})`,
             isAutomated: true,
-            type: 'Gasto'
+            type: 'Gasto',
+            tag: 'SUMINISTROS'
           });
           count++;
         }
@@ -276,7 +336,9 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
   };
 
   const filteredTransactions = safeTransactions.filter((t: any) => {
-    return t.date >= dateRange.start && t.date <= dateRange.end;
+    const inRange = t.date >= dateRange.start && t.date <= dateRange.end;
+    const matchesTag = tagFilter ? t.tag === tagFilter : true;
+    return inRange && matchesTag;
   }).sort((a: any, b: any) => {
     const modifier = sortOrder === 'asc' ? 1 : -1;
     if (sortBy === 'date') {
@@ -296,7 +358,8 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
     amount: 0,
     accountId: '',
     description: '',
-    type: 'Ingreso' as 'Ingreso' | 'Gasto'
+    type: 'Ingreso' as 'Ingreso' | 'Gasto',
+    tag: ''
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -311,7 +374,8 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
       amount: 0,
       accountId: '',
       description: '',
-      type: 'Ingreso'
+      type: 'Ingreso',
+      tag: ''
     });
   };
 
@@ -334,24 +398,26 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
         format(parseISO(t.date), 'dd/MM/yyyy'),
         t.description + (t.isAutomated ? ' [AUTO]' : ''),
         account ? account.name : 'N/A',
-        isIngreso ? 'IN' : 'out',
+        t.tag || '',
+        isIngreso ? 'INGRESO' : 'GASTO',
         formattedAmount
       ];
     });
 
     autoTable(doc, {
       startY: 25,
-      head: [['Fecha', 'Descripción', 'Cuenta', 'Tipo', 'Importe']],
+      head: [['Fecha', 'Descripción', 'Cuenta', 'Etiqueta', 'Tipo', 'Importe']],
       body: tableData,
       theme: 'grid',
       styles: { fontSize: 7, cellPadding: 1.5, textColor: [40, 40, 40] },
       headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontSize: 8, fontStyle: 'bold', lineWidth: 0.1, lineColor: [200, 200, 200] },
       columnStyles: {
-        0: { cellWidth: 20 },
+        0: { cellWidth: 15 },
         1: { cellWidth: 'auto' },
-        2: { cellWidth: 40 },
-        3: { cellWidth: 10, halign: 'center' },
-        4: { cellWidth: 25, halign: 'right' },
+        2: { cellWidth: 35 },
+        3: { cellWidth: 20 },
+        4: { cellWidth: 10, halign: 'center' },
+        5: { cellWidth: 20, halign: 'right' },
       },
     });
 
@@ -382,6 +448,20 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
               onChange={(e) => setDateRange(p => ({ ...p, end: e.target.value }))}
               className="bg-transparent text-[11px] outline-none text-slate-700"
             />
+          </div>
+
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-bold min-w-[150px]">
+            <span className="text-[9px] text-slate-400 uppercase">Etiqueta</span>
+            <select 
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+              className="bg-transparent text-[11px] outline-none text-slate-700 w-full uppercase"
+            >
+              <option value="">TODAS</option>
+              {(economicSettings?.tags || DEFAULT_TAGS).map((tag: string) => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
+            </select>
           </div>
 
           <button 
@@ -535,6 +615,14 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
                           Automático
                         </span>
                       )}
+                      {t.tag && (() => {
+                        const style = getTagColor(t.tag);
+                        return (
+                          <span className={`inline-flex items-center self-start px-2 py-0.5 rounded-md ${style.bg} ${style.text} text-[9px] print:text-[7px] font-black uppercase tracking-widest border ${style.border} print:border-black/10 print:bg-transparent print:text-black print:px-0`}>
+                            {t.tag}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </td>
                   <td className="px-6 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent">
@@ -647,6 +735,19 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
                   <option value="">Seleccionar cuenta...</option>
                   {safeAccounts.filter((a:any) => a.type === formData.type).sort((a: any, b: any) => (a.code || '').localeCompare(b.code || '')).map((a: any, aIdx: number) => (
                     <option key={`ae-acc-${a.id || 'no-id'}-${aIdx}`} value={a.id}>{a.code} - {a.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Etiqueta (Opcional)</label>
+                <select 
+                  value={formData.tag || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, tag: e.target.value }))}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                >
+                  <option value="">Ninguna</option>
+                  {(economicSettings?.tags || DEFAULT_TAGS).map((tag: string) => (
+                    <option key={tag} value={tag}>{tag}</option>
                   ))}
                 </select>
               </div>
@@ -857,7 +958,7 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
 function SummaryTab({ transactions, accounts }: any) {
   const { economicSettings, addTransaction } = useData();
   const [dateRange, setDateRange] = useState({
-    start: format(new Date(new Date().getFullYear() - (new Date().getMonth() < 8 ? 1 : 0), 8, 10), 'yyyy-MM-dd'),
+    start: format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'),
     end: format(new Date(), 'yyyy-MM-dd')
   });
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
@@ -1579,7 +1680,8 @@ function TeamEconomicRow({ team, status, settings, accounts, updateStatus, addTr
               description: `Lote de ${diff} Licencia(s) Tipo 1: ${team.name}`,
               relatedTeamId: team.id,
               isAutomated: true,
-              type: 'Ingreso'
+              type: 'Ingreso',
+              tag: 'LIGA REGULAR'
             });
           }
         }
@@ -1613,7 +1715,8 @@ function TeamEconomicRow({ team, status, settings, accounts, updateStatus, addTr
               description: `Lote de ${diff} Licencia(s) Tipo 2: ${team.name}`,
               relatedTeamId: team.id,
               isAutomated: true,
-              type: 'Ingreso'
+              type: 'Ingreso',
+              tag: 'LIGA REGULAR'
             });
           }
         }
@@ -1647,7 +1750,8 @@ function TeamEconomicRow({ team, status, settings, accounts, updateStatus, addTr
               description: `Lote de ${diff} Licencia(s) Tipo 3: ${team.name}`,
               relatedTeamId: team.id,
               isAutomated: true,
-              type: 'Ingreso'
+              type: 'Ingreso',
+              tag: 'LIGA REGULAR'
             });
           }
         }
@@ -1676,7 +1780,8 @@ function TeamEconomicRow({ team, status, settings, accounts, updateStatus, addTr
             description: `Cuota Inscripción: ${team.name} (Temporada ${settings.season || '25-26'})`,
             relatedTeamId: team.id,
             isAutomated: true,
-            type: 'Ingreso'
+            type: 'Ingreso',
+            tag: 'LIGA REGULAR'
           });
         }
       }
@@ -2129,6 +2234,8 @@ function ConfigEconomicTab({ settings, updateSettings }: any) {
     mygol_monthly_cost: typeof settings.mygol_monthly_cost === 'number' && !isNaN(settings.mygol_monthly_cost) ? settings.mygol_monthly_cost : 0
   });
 
+  const [tags, setTags] = useState<string[]>(settings.tags || ['AEMF', 'NACIONAL F7', 'NACIONAL FS', 'NACIONAL F7+35', 'ARBITROS', 'INSTALACIONES', 'EUROPEO EMF', 'MUNDIAL WMF', 'NACIONAL F6', 'SUMINISTROS', 'ARRENDAMIENTOS', 'VOLUNTARIOS', 'LIGA REGULAR']);
+  const [newTag, setNewTag] = useState('');
   const [venueCosts, setVenueCosts] = useState<any[]>(settings.venue_costs || []);
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -2152,6 +2259,9 @@ function ConfigEconomicTab({ settings, updateSettings }: any) {
     // También sincronizar las tarifas de instalaciones cuando cambian en Firebase
     if (settings.venue_costs) {
       setVenueCosts(settings.venue_costs);
+    }
+    if (settings.tags) {
+      setTags(settings.tags);
     }
   }, [settings]);
 
@@ -2178,8 +2288,8 @@ function ConfigEconomicTab({ settings, updateSettings }: any) {
   }, [venuesFromMatches]);
 
   const handleSave = () => {
-    console.log("Saving settings to Firebase:", { ...formData, venue_costs: venueCosts });
-    updateSettings({ ...formData, venue_costs: venueCosts });
+    console.log("Saving settings to Firebase:", { ...formData, venue_costs: venueCosts, tags });
+    updateSettings({ ...formData, venue_costs: venueCosts, tags });
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
   };
@@ -2410,6 +2520,60 @@ function ConfigEconomicTab({ settings, updateSettings }: any) {
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">€</span>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-8 border-t border-slate-100">
+          <div className="space-y-4">
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Mantenimiento de Etiquetas (Tags)</h3>
+            <p className="text-[10px] text-slate-500 font-medium italic">Estas etiquetas podrán asignarse a cualquier asiento contable para agrupar ingresos y gastos de distintas naturalezas (ej. Campeonatos Nacionales).</p>
+            
+            <div className="flex flex-col gap-4 bg-slate-50 border border-slate-100 rounded-2xl p-4">
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value.toUpperCase())}
+                  placeholder="NUEVA ETIQUETA..."
+                  className="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 uppercase"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newTag.trim() && !tags.includes(newTag.trim())) {
+                      setTags([...tags, newTag.trim()]);
+                      setNewTag('');
+                    }
+                  }}
+                />
+                <button 
+                  onClick={() => {
+                    if (newTag.trim() && !tags.includes(newTag.trim())) {
+                      setTags([...tags, newTag.trim()]);
+                      setNewTag('');
+                    }
+                  }}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase hover:bg-indigo-700 transition"
+                >
+                  Añadir
+                </button>
+              </div>
+              
+              <div className="flex flex-wrap gap-2">
+                {tags.map(tag => {
+                  const style = getTagColor(tag);
+                  return (
+                    <div key={tag} className={`flex items-center gap-2 px-3 py-1.5 ${style.bg} border ${style.border} rounded-lg shadow-sm`}>
+                      <span className={`text-[10px] font-bold ${style.text} uppercase`}>{tag}</span>
+                      <button 
+                        onClick={() => setTags(tags.filter(t => t !== tag))}
+                        className={`${style.text} hover:opacity-75 transition-opacity opacity-50`}
+                        title="Eliminar Etiqueta"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

@@ -140,28 +140,32 @@ export default function AdminDashboard() {
     <div className="space-y-10">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-2 px-1">TABLERO DE INFORMACIÓN GENERAL</p>
-          <h2 className="text-3xl font-display font-black text-slate-900 uppercase tracking-tight">PANEL DE CONTROL</h2>
+          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em] mb-2 px-1">TABLERO DE INFORMACIÓN GENERAL</p>
+          <h2 className="text-3xl font-display font-black text-slate-900 uppercase tracking-tight relative inline-block">
+            PANEL DE CONTROL
+            <div className="absolute -bottom-2 left-0 w-1/3 h-1 bg-emerald-500 rounded-full"></div>
+          </h2>
         </div>
         <div className="flex items-center px-4 py-2 bg-white rounded-2xl shadow-sm border border-slate-100">
         </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
         {stats.map((stat, index) => (
-          <div key={`stat-${stat.title.replace(/\s+/g, '-')}-${index}`} className="group bg-white rounded-[2rem] p-6 shadow-app border border-white hover:border-slate-200 transition-all hover:shadow-app-lg relative overflow-hidden active:scale-[0.99]">
-             <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full -mr-16 -mt-16 group-hover:scale-110 transition-transform duration-500 opacity-50"></div>
+          <div key={`stat-${stat.title.replace(/\s+/g, '-')}-${index}`} className="group bg-white rounded-[2rem] p-6 shadow-sm border border-slate-200 hover:border-emerald-500 transition-all hover:shadow-xl relative overflow-hidden active:scale-[0.99]">
+             <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 opacity-20 rounded-full -mr-16 -mt-16 group-hover:scale-110 transition-transform duration-500"></div>
             
-            <div className="flex items-start justify-between relative z-10">
-              <div className="flex-1">
+            <div className="flex items-start justify-between relative z-10 w-full">
+              <div className="flex-1 w-[80%]">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center">
                   <span className={`w-1.5 h-1.5 rounded-full mr-2 ${stat.iconColor.replace('text', 'bg')}`}></span>
                   {stat.title}
                 </p>
-                <div className="text-3xl font-black text-slate-900 tracking-tight mb-2">{stat.value ?? '0'}</div>
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">{stat.subtitle}</div>
+                <div className="text-3xl font-black text-slate-900 tracking-tight mb-4 truncate w-full">{stat.value ?? '0'}</div>
+                <div className="h-px bg-slate-100 w-full mb-4"></div>
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest w-full">{stat.subtitle}</div>
               </div>
-              <div className={`${stat.iconBg} p-4 rounded-2xl shadow-sm group-hover:scale-110 transition-transform`}>
+              <div className={`${stat.iconBg} p-4 rounded-2xl shadow-inner group-hover:scale-110 transition-transform shrink-0 ml-4 ring-1 ring-inset ring-white/50 bg-opacity-50`}>
                 <stat.icon className={`w-6 h-6 ${stat.iconColor}`} />
               </div>
             </div>
