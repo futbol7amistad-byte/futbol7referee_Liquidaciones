@@ -64,13 +64,14 @@ export default function Login() {
                <img 
                   src={bgImgUrl}
                   alt="Stadium"
-                  className="w-full h-full object-cover opacity-60"
+                  className={`w-full h-full object-cover transition-opacity duration-700 ${view === 'intro' ? 'opacity-60' : 'opacity-100'}`}
                />
-               <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm md:backdrop-blur-none"></div>
+               <div className={`absolute inset-0 transition-opacity duration-700 ${view === 'intro' ? 'bg-slate-950/70 backdrop-blur-sm md:backdrop-blur-none' : 'bg-gradient-to-b from-slate-900/50 via-transparent to-slate-900/40'}`}></div>
             </div>
 
             {/* Container for forms */}
-            <div className="relative z-10 w-full max-w-xl mx-auto px-4 md:px-0 flex flex-col justify-center items-center h-full">
+            <div className={`relative z-10 w-full max-w-xl mx-auto ${view === 'intro' ? 'px-4 flex flex-col justify-center items-center h-full' : 'px-0 md:px-4 flex flex-col justify-end md:justify-center items-center h-[100dvh]'}`}>
+
               
               {/* Back button logic over the image for selection */}
               {view !== 'intro' && (
@@ -126,17 +127,11 @@ export default function Login() {
                    initial={{ y: 50, opacity: 0 }}
                    animate={{ y: 0, opacity: 1 }}
                    transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                   className="bg-white/95 backdrop-blur-md w-full rounded-[2rem] p-8 pb-12 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col items-center border border-white/20"
+                   className="bg-white w-full rounded-t-[2rem] md:rounded-[2rem] p-8 pb-12 shadow-[0_-20px_60px_-15px_rgba(0,0,0,0.3)] flex flex-col items-center relative"
                 >
-                  <div className="w-20 h-20 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/30 mb-6 text-white transition-transform">
-                     {settings?.logo_url ? (
-                       <img src={settings.logo_url} alt="Logo" className="w-12 h-12 object-contain" referrerPolicy="no-referrer" />
-                     ) : (
-                       <Trophy className="w-10 h-10" />
-                     )}
-                  </div>
+                  <div className="w-12 h-1.5 bg-gray-200 rounded-full mb-8 md:hidden mx-auto absolute top-4 left-1/2 -translate-x-1/2"></div>
                   
-                  <div className="text-center mb-8">
+                  <div className="text-center mb-8 mt-2">
                     <h2 className="text-3xl font-black text-slate-900 mb-2">Bienvenido</h2>
                     <p className="text-slate-500 font-medium">Selecciona tu tipo de acceso para continuar</p>
                   </div>
@@ -179,9 +174,11 @@ export default function Login() {
                    initial={{ y: 50, opacity: 0 }}
                    animate={{ y: 0, opacity: 1 }}
                    transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                   className="bg-white/95 backdrop-blur-md w-full rounded-[2rem] p-8 sm:px-10 pb-12 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] flex flex-col relative border border-white/20"
+                   className="bg-white w-full rounded-t-[2rem] md:rounded-[2rem] p-8 sm:px-10 pb-12 shadow-[0_-20px_60px_-15px_rgba(0,0,0,0.3)] flex flex-col relative"
                 >
-                  <div className="mb-8">
+                  <div className="w-12 h-1.5 bg-gray-200 rounded-full mb-8 md:hidden mx-auto absolute top-4 left-1/2 -translate-x-1/2"></div>
+                  
+                  <div className="mb-8 mt-4">
                     <h2 className="text-3xl font-black text-slate-900 mb-2">Introduzca sus Claves</h2>
                     <p className="text-slate-500 font-medium">Administración • Temporada {settings?.season}</p>
                   </div>
@@ -257,11 +254,11 @@ export default function Login() {
                    initial={{ y: 50, opacity: 0 }}
                    animate={{ y: 0, opacity: 1 }}
                    transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                   className="bg-white w-full h-full md:h-auto min-h-[60vh] md:min-h-0 rounded-t-[2rem] md:rounded-[2rem] p-8 sm:px-10 pb-12 shadow-[0_-20px_40px_rgba(0,0,0,0.1)] md:shadow-2xl flex flex-col md:max-w-md md:mx-auto md:my-auto relative"
+                   className="bg-white w-full min-h-[60vh] md:min-h-0 rounded-t-[2rem] md:rounded-[2rem] p-8 sm:px-10 pb-12 shadow-[0_-20px_60px_-15px_rgba(0,0,0,0.3)] flex flex-col relative"
                 >
-                  <div className="w-12 h-1.5 bg-gray-200 rounded-full mb-8 md:hidden mx-auto"></div>
+                  <div className="w-12 h-1.5 bg-gray-200 rounded-full mb-8 md:hidden mx-auto absolute top-4 left-1/2 -translate-x-1/2"></div>
                   
-                  <div className="mb-8">
+                  <div className="mb-8 mt-4">
                     <h2 className="text-3xl font-black text-gray-900 mb-2">Introduzca sus Claves</h2>
                     <p className="text-gray-500 font-medium">Árbitros • Temporada {settings?.season}</p>
                   </div>

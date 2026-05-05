@@ -36,8 +36,9 @@ export default function AdminDashboard() {
   const activePayments = uniquePayments.filter(p => activeLiquidatedMatches.some(m => m.id === p.match_id));
 
   // KPIs
+  const todayMatches = matches.filter(m => m.match_date === today);
   const totalCollectedActive = activePayments.filter(p => p.is_paid && p.reason === 'Metálico').reduce((acc, p) => acc + (p.amount as number), 0);
-  const totalCollectedToday = uniquePayments.filter((p: any) => p.is_paid && p.reason === 'Metálico' && p.created_at.startsWith(today)).reduce((acc, p) => acc + (p.amount as number), 0);
+  const totalCollectedToday = uniquePayments.filter((p: any) => p.is_paid && p.reason === 'Metálico' && todayMatches.some(m => m.id === p.match_id)).reduce((acc, p) => acc + (p.amount as number), 0);
   
   const activeReferees = [...new Set(activeMatches.map(m => m.referee_id))].filter(Boolean);
   

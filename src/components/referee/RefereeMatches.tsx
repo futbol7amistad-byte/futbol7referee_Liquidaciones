@@ -205,6 +205,11 @@ function MatchCard({ match, getTeamName, getPaymentStatus, onSavePayment, onUpda
   const [localPaymentA, setLocalPaymentA] = useState({ isPaid: paymentA?.is_paid ?? false, reason: paymentA?.reason ?? '' });
   const [localPaymentB, setLocalPaymentB] = useState({ isPaid: paymentB?.is_paid ?? false, reason: paymentB?.reason ?? '' });
 
+  React.useEffect(() => {
+    setLocalPaymentA({ isPaid: paymentA?.is_paid ?? false, reason: paymentA?.reason ?? '' });
+    setLocalPaymentB({ isPaid: paymentB?.is_paid ?? false, reason: paymentB?.reason ?? '' });
+  }, [paymentA?.is_paid, paymentA?.reason, paymentB?.is_paid, paymentB?.reason]);
+
   const canEdit = !isLiquidated || isEditing;
 
   const handleSave = async () => {
@@ -232,7 +237,14 @@ function MatchCard({ match, getTeamName, getPaymentStatus, onSavePayment, onUpda
   };
 
   const isCash = (payment: any) => payment?.is_paid && payment?.reason === 'Metálico';
-  const totalCollected = isLiquidated ? (isCash(paymentA) ? 35 : 0) + (isCash(paymentB) ? 35 : 0) : 0;
+  
+  // Calculate total collected based on local state if editing or not liquidated, otherwise server state
+  const isCashLocalA = localPaymentA.isPaid && (!localPaymentA.reason || localPaymentA.reason === 'Metálico');
+  const isCashLocalB = localPaymentB.isPaid && (!localPaymentB.reason || localPaymentB.reason === 'Metálico');
+  
+  const totalCollected = isEditing || !isLiquidated
+    ? (isCashLocalA ? 35 : 0) + (isCashLocalB ? 35 : 0)
+    : (isCash(paymentA) ? 35 : 0) + (isCash(paymentB) ? 35 : 0);
 
   return (
     <motion.div 

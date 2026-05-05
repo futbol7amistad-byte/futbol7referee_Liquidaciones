@@ -39,7 +39,7 @@ import { getWhatsAppLink } from '../../utils/whatsapp';
 
 type EconomicTab = 'dashboard' | 'journal' | 'summary' | 'teams' | 'accounts' | 'config' | 'budget';
 
-const DEFAULT_TAGS = ['AEMF', 'NACIONAL F7', 'NACIONAL FS', 'NACIONAL F7+35', 'ARBITROS', 'INSTALACIONES', 'EUROPEO EMF', 'MUNDIAL WMF', 'NACIONAL F6', 'SUMINISTROS', 'ARRENDAMIENTOS', 'VOLUNTARIOS', 'LIGA REGULAR'];
+const DEFAULT_TAGS = ['AEMF', 'NACIONAL F7', 'NACIONAL FS', 'NACIONAL F7+35', 'ARBITROS', 'INSTALACIONES', 'EUROPEO EMF', 'MUNDIAL WMF', 'NACIONAL F6', 'SUMINISTROS', 'ARRENDAMIENTOS', 'VOLUNTARIOS', 'LIGA REGULAR', 'LICENCIA-1', 'LICENCIA-2', 'LICENCIA-3'];
 
 export const getTagColor = (tag: string) => {
   if (!tag) return { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200' };
@@ -60,6 +60,10 @@ export const getTagColor = (tag: string) => {
     'ARRENDAMIENTOS': { bg: 'bg-teal-600', text: 'text-white', border: 'border-teal-700' },
     'VOLUNTARIOS': { bg: 'bg-fuchsia-600', text: 'text-white', border: 'border-fuchsia-700' },
     'LIGA REGULAR': { bg: 'bg-lime-600', text: 'text-white', border: 'border-lime-700' },
+    'LICENCIA-1': { bg: 'bg-sky-600', text: 'text-white', border: 'border-sky-700' },
+    'LICENCIA-2': { bg: 'bg-violet-600', text: 'text-white', border: 'border-violet-700' },
+    'LICENCIA-3': { bg: 'bg-fuchsia-600', text: 'text-white', border: 'border-fuchsia-700' },
+    'INSCRIPCIÓN': { bg: 'bg-yellow-600', text: 'text-white', border: 'border-yellow-700' },
   };
 
   if (explicitColors[normalizedTag]) {
@@ -338,7 +342,13 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
   }).sort((a: any, b: any) => {
     const modifier = sortOrder === 'asc' ? 1 : -1;
     if (sortBy === 'date') {
-      return (parseISO(a.date).getTime() - parseISO(b.date).getTime()) * modifier;
+      const dateDiff = (parseISO(a.date).getTime() - parseISO(b.date).getTime()) * modifier;
+      if (dateDiff === 0) {
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return (timeA - timeB) * modifier;
+      }
+      return dateDiff;
     } else if (sortBy === 'account') {
       const aAccount = safeAccounts.find((acc: any) => acc.id === a.accountId);
       const bAccount = safeAccounts.find((acc: any) => acc.id === b.accountId);
@@ -600,21 +610,19 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
                     </div>
                   </td>
                   <td className="px-4 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent min-w-[250px] w-full">
-                    <div className="flex flex-col gap-1 print:gap-0">
-                      <div className="flex items-start gap-2">
-                        {isIngreso ? <TrendingUp className="w-4 h-4 mt-0.5 text-emerald-500 flex-shrink-0 print:hidden" /> : <TrendingDown className="w-4 h-4 mt-0.5 text-rose-500 flex-shrink-0 print:hidden" />}
-                        <span className="text-sm print:text-[9px] font-bold text-slate-700 print:text-black break-words leading-tight">{t.description}</span>
-                      </div>
+                    <div className="flex items-center gap-2 print:gap-1">
+                      {isIngreso ? <TrendingUp className="w-4 h-4 text-emerald-500 flex-shrink-0 print:hidden" /> : <TrendingDown className="w-4 h-4 text-rose-500 flex-shrink-0 print:hidden" />}
+                      <span className="text-sm print:text-[9px] font-bold text-slate-700 print:text-black truncate md:whitespace-normal md:break-words leading-tight mr-2">{t.description}</span>
                       {t.isAutomated && (
-                        <span className="inline-flex items-center self-start px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 text-[9px] print:text-[7px] font-black uppercase tracking-widest border border-indigo-100 print:border-black/10 print:bg-transparent print:text-black print:px-0">
-                          <Settings className="w-2.5 h-2.5 mr-1" />
+                        <span className="inline-flex flex-shrink-0 items-center px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 text-[9px] print:text-[7px] font-black uppercase tracking-widest border border-indigo-100 print:border-black/10 print:bg-transparent print:text-black print:px-0 whitespace-nowrap">
+                          <Settings className="w-2.5 h-2.5 mr-1 print:hidden" />
                           Automático
                         </span>
                       )}
                       {t.tag && (() => {
                         const style = getTagColor(t.tag);
                         return (
-                          <span className={`inline-flex items-center self-start px-2 py-0.5 rounded-md ${style.bg} ${style.text} text-[9px] print:text-[7px] font-black uppercase tracking-widest border ${style.border} print:border-black/10 print:bg-transparent print:text-black print:px-0`}>
+                          <span className={`inline-flex flex-shrink-0 items-center px-2 py-0.5 rounded-md ${style.bg} ${style.text} text-[9px] print:text-[7px] font-black uppercase tracking-widest border ${style.border} print:border-black/10 print:bg-transparent print:text-black print:px-0 whitespace-nowrap`}>
                             {t.tag}
                           </span>
                         );
@@ -1679,7 +1687,7 @@ function TeamEconomicRow({ team, status, settings, accounts, updateStatus, addTr
               relatedTeamId: team.id,
               isAutomated: true,
               type: 'Ingreso',
-              tag: 'LIGA REGULAR'
+              tag: 'LICENCIA-1'
             });
           }
         }
@@ -1714,7 +1722,7 @@ function TeamEconomicRow({ team, status, settings, accounts, updateStatus, addTr
               relatedTeamId: team.id,
               isAutomated: true,
               type: 'Ingreso',
-              tag: 'LIGA REGULAR'
+              tag: 'LICENCIA-2'
             });
           }
         }
@@ -1749,7 +1757,7 @@ function TeamEconomicRow({ team, status, settings, accounts, updateStatus, addTr
               relatedTeamId: team.id,
               isAutomated: true,
               type: 'Ingreso',
-              tag: 'LIGA REGULAR'
+              tag: 'LICENCIA-3'
             });
           }
         }
@@ -1779,7 +1787,7 @@ function TeamEconomicRow({ team, status, settings, accounts, updateStatus, addTr
             relatedTeamId: team.id,
             isAutomated: true,
             type: 'Ingreso',
-            tag: 'EQUIPOS INSCRIPCION'
+            tag: 'INSCRIPCIÓN'
           });
         }
       }
