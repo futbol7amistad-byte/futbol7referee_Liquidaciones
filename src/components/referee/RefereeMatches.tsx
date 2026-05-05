@@ -87,12 +87,12 @@ export default function RefereeMatches() {
   const today = new Date().toISOString().split('T')[0];
   const todayMatches = myMatches.filter(m => m.match_date === today && m.status === 'Liquidado');
   const collectedToday = uniquePayments
-    .filter(p => todayMatches.some(m => m.id === p.match_id) && p.is_paid)
+    .filter(p => todayMatches.some(m => m.id === p.match_id) && p.is_paid && p.reason === 'Metálico')
     .reduce((sum, p) => sum + p.amount, 0);
 
   const weekMatches = filteredMatches.filter(m => m.status === 'Liquidado'); 
   const collectedWeek = uniquePayments
-    .filter(p => weekMatches.some(m => m.id === p.match_id) && p.is_paid)
+    .filter(p => weekMatches.some(m => m.id === p.match_id) && p.is_paid && p.reason === 'Metálico')
     .reduce((sum, p) => sum + p.amount, 0);
 
   const pendingMatches = filteredMatches.filter(m => m.status !== 'Liquidado').length;
@@ -231,7 +231,8 @@ function MatchCard({ match, getTeamName, getPaymentStatus, onSavePayment, onUpda
     setIsEditing(false);
   };
 
-  const totalCollected = isLiquidated ? (paymentA?.is_paid ? 35 : 0) + (paymentB?.is_paid ? 35 : 0) : 0;
+  const isCash = (payment: any) => payment?.is_paid && payment?.reason === 'Metálico';
+  const totalCollected = isLiquidated ? (isCash(paymentA) ? 35 : 0) + (isCash(paymentB) ? 35 : 0) : 0;
 
   return (
     <motion.div 
@@ -334,29 +335,36 @@ function MatchCard({ match, getTeamName, getPaymentStatus, onSavePayment, onUpda
 }
 
 function TeamPaymentRow({ teamName, payment, onChange, canEdit }: any) {
+  const isCash = payment.isPaid && payment.reason === 'Metálico';
+  const isTransfer = payment.isPaid && payment.reason && payment.reason !== 'Metálico';
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center px-1">
-        <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight truncate max-w-[200px]">{teamName}</h4>
+        <h4 className={`text-sm font-black uppercase tracking-tight truncate max-w-[200px] ${
+          payment.isPaid ? (isCash ? 'text-emerald-700' : 'text-blue-700') : 'text-slate-900'
+        }`}>{teamName}</h4>
         <span className="text-xs font-bold text-slate-300">35.00€</span>
       </div>
       
       <div className="grid grid-cols-2 gap-3">
         <button 
           disabled={!canEdit}
-          onClick={() => onChange({ ...payment, isPaid: true })}
+          onClick={() => onChange({ ...payment, isPaid: true, reason: 'Metálico' })}
           className={`py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-wider flex items-center justify-center transition-all border-2 active:scale-95 ${
             payment.isPaid 
-              ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-100' 
+              ? (isCash 
+                  ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-100' 
+                  : 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-100')
               : 'bg-white text-slate-400 border-slate-100 hover:border-slate-200'
           }`}
         >
           <CheckCircle2 className="w-4 h-4 mr-2" />
-          Pagado
+          {isTransfer ? 'Tranf.' : 'Pagado'}
         </button>
         <button 
           disabled={!canEdit}
-          onClick={() => onChange({ ...payment, isPaid: false })}
+          onClick={() => onChange({ ...payment, isPaid: false, reason: '' })}
           className={`py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-wider flex items-center justify-center transition-all border-2 active:scale-95 ${
             !payment.isPaid 
               ? 'bg-red-500 text-white border-red-500 shadow-lg shadow-red-100' 

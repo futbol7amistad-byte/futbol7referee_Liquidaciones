@@ -44,55 +44,51 @@ const DEFAULT_TAGS = ['AEMF', 'NACIONAL F7', 'NACIONAL FS', 'NACIONAL F7+35', 'A
 export const getTagColor = (tag: string) => {
   if (!tag) return { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200' };
   
+  const normalizedTag = tag.trim().toUpperCase();
+  
+  const explicitColors: Record<string, { bg: string, text: string, border: string }> = {
+    'AEMF': { bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-700' },
+    'NACIONAL F7': { bg: 'bg-emerald-600', text: 'text-white', border: 'border-emerald-700' },
+    'NACIONAL FS': { bg: 'bg-indigo-600', text: 'text-white', border: 'border-indigo-700' },
+    'NACIONAL F7+35': { bg: 'bg-purple-600', text: 'text-white', border: 'border-purple-700' },
+    'NACIONAL F6': { bg: 'bg-cyan-600', text: 'text-white', border: 'border-cyan-700' },
+    'EUROPEO EMF': { bg: 'bg-pink-600', text: 'text-white', border: 'border-pink-700' },
+    'MUNDIAL WMF': { bg: 'bg-orange-600', text: 'text-white', border: 'border-orange-700' },
+    'ARBITROS': { bg: 'bg-slate-800', text: 'text-white', border: 'border-slate-900' },
+    'INSTALACIONES': { bg: 'bg-amber-500', text: 'text-white', border: 'border-amber-600' },
+    'SUMINISTROS': { bg: 'bg-rose-600', text: 'text-white', border: 'border-rose-700' },
+    'ARRENDAMIENTOS': { bg: 'bg-teal-600', text: 'text-white', border: 'border-teal-700' },
+    'VOLUNTARIOS': { bg: 'bg-fuchsia-600', text: 'text-white', border: 'border-fuchsia-700' },
+    'LIGA REGULAR': { bg: 'bg-lime-600', text: 'text-white', border: 'border-lime-700' },
+  };
+
+  if (explicitColors[normalizedTag]) {
+    return explicitColors[normalizedTag];
+  }
+
   let hash = 0;
   for (let i = 0; i < tag.length; i++) {
     hash = tag.charCodeAt(i) + ((hash << 5) - hash);
   }
   
-  const colors = [
-    { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
-    { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
-    { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' }, 
-    { bg: 'bg-yellow-50', text: 'text-yellow-800', border: 'border-yellow-200' },
-    { bg: 'bg-lime-50', text: 'text-lime-700', border: 'border-lime-200' },
-    { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-    { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
-    { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200' },
-    { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
-    { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200' },
-    { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-    { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200' },
-    { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200' },
-    { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
-    { bg: 'bg-fuchsia-50', text: 'text-fuchsia-700', border: 'border-fuchsia-200' },
-    { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200' },
-    { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
-    { bg: 'bg-stone-50', text: 'text-stone-700', border: 'border-stone-200' },
-    { bg: 'bg-neutral-50', text: 'text-neutral-700', border: 'border-neutral-200' },
+  const autoColors = [
+    { bg: 'bg-red-600', text: 'text-white', border: 'border-red-700' },
+    { bg: 'bg-orange-600', text: 'text-white', border: 'border-orange-700' },
+    { bg: 'bg-amber-500', text: 'text-white', border: 'border-amber-600' }, 
+    { bg: 'bg-lime-600', text: 'text-white', border: 'border-lime-700' },
+    { bg: 'bg-emerald-600', text: 'text-white', border: 'border-emerald-700' },
+    { bg: 'bg-teal-600', text: 'text-white', border: 'border-teal-700' },
+    { bg: 'bg-cyan-600', text: 'text-white', border: 'border-cyan-700' },
+    { bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-700' },
+    { bg: 'bg-indigo-600', text: 'text-white', border: 'border-indigo-700' },
+    { bg: 'bg-violet-600', text: 'text-white', border: 'border-violet-700' },
+    { bg: 'bg-purple-600', text: 'text-white', border: 'border-purple-700' },
+    { bg: 'bg-fuchsia-600', text: 'text-white', border: 'border-fuchsia-700' },
+    { bg: 'bg-pink-600', text: 'text-white', border: 'border-pink-700' },
+    { bg: 'bg-rose-600', text: 'text-white', border: 'border-rose-700' },
   ];
   
-  const predefined: Record<string, number> = {
-    'AEMF': 10,
-    'NACIONAL F7': 6,
-    'NACIONAL FS': 1,
-    'NACIONAL F7+35': 13,
-    'ARBITROS': 18,
-    'INSTALACIONES': 17,
-    'EUROPEO EMF': 4,
-    'MUNDIAL WMF': 8,
-    'NACIONAL F6': 15,
-    'SUMINISTROS': 16,
-    'ARRENDAMIENTOS': 0,
-    'VOLUNTARIOS': 2,
-    'LIGA REGULAR': 11,
-  };
-
-  const normalizedTag = tag.trim().toUpperCase();
-  if (predefined[normalizedTag] !== undefined) {
-      return colors[predefined[normalizedTag]];
-  }
-
-  return colors[Math.abs(hash) % colors.length];
+  return autoColors[Math.abs(hash) % autoColors.length];
 };
 
 export default function AdminEconomic() {
@@ -538,25 +534,25 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
                 </div>
               </th>
               <th 
-                className="px-6 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors"
+                className="px-4 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors"
                 onClick={() => handleSort('date')}
               >
                 <div className="flex items-center gap-2">
                   Fecha <ArrowUpDown className="w-3 h-3" />
                 </div>
               </th>
-              <th className="px-6 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest">Descripción</th>
+              <th className="px-4 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest">Descripción</th>
               <th 
-                className="px-6 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors"
+                className="px-4 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors"
                 onClick={() => handleSort('account')}
               >
                 <div className="flex items-center gap-2">
                   Cuenta <ArrowUpDown className="w-3 h-3" />
                 </div>
               </th>
-              <th className="px-6 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest hidden print:table-cell">Tipo</th>
-              <th className="px-6 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest text-right">Importe</th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right print:hidden">Acciones</th>
+              <th className="px-2 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest hidden print:table-cell">Tipo</th>
+              <th className="px-4 py-4 print:px-2 print:py-1.5 text-[10px] print:text-[8px] font-black text-slate-400 print:text-black uppercase tracking-widest text-right">Importe</th>
+              <th className="px-4 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right print:hidden">Acciones</th>
             </tr>
           </thead>
           <tbody className="space-y-2 print:space-y-0 before:content-[''] before:block before:h-2 print:before:hidden">
@@ -603,7 +599,7 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent max-w-[200px] print:max-w-[150px]">
+                  <td className="px-4 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent min-w-[250px] w-full">
                     <div className="flex flex-col gap-1 print:gap-0">
                       <div className="flex items-start gap-2">
                         {isIngreso ? <TrendingUp className="w-4 h-4 mt-0.5 text-emerald-500 flex-shrink-0 print:hidden" /> : <TrendingDown className="w-4 h-4 mt-0.5 text-rose-500 flex-shrink-0 print:hidden" />}
@@ -625,30 +621,30 @@ function JournalTab({ transactions, accounts, addTransaction, deleteTransaction,
                       })()}
                     </div>
                   </td>
-                  <td className="px-6 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent">
+                  <td className="px-4 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent whitespace-nowrap">
                     {account ? (
                       <div className="flex flex-col">
                         <span className="text-xs print:text-[8px] font-black text-slate-900 print:text-black">{account.code}</span>
-                        <span className="text-[10px] print:text-[7px] font-bold text-slate-500 print:text-black/80 uppercase tracking-tighter truncate max-w-[150px] print:max-w-[100px]">{account.name}</span>
+                        <span className="text-[10px] print:text-[7px] font-bold text-slate-500 print:text-black/80 uppercase tracking-tighter truncate max-w-[120px] print:max-w-[100px]">{account.name}</span>
                       </div>
                     ) : (
                       <span className="text-xs print:text-[8px] font-bold text-slate-400 print:text-black italic">N/A</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent hidden print:table-cell">
-                    <span className="text-[9px] font-bold uppercase">{isIngreso ? 'IN' : 'out'}</span>
+                  <td className="px-2 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent hidden print:table-cell">
+                    <span className="text-[9px] font-bold uppercase">{isIngreso ? 'INGRESO' : 'GASTO'}</span>
                   </td>
-                  <td className="px-6 py-4 print:hidden border-b border-slate-50 print:border-transparent">
-                    <div className={`inline-flex items-center justify-center p-2 rounded-xl border ${isIngreso ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'}`}>
-                      {isIngreso ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                  <td className="px-4 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent text-right whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-3 print:justify-end">
+                      <div className={`hidden sm:inline-flex items-center justify-center p-1.5 rounded-xl border print:hidden ${isIngreso ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'}`}>
+                        {isIngreso ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                      </div>
+                      <span className={`text-base print:text-[10px] font-black tabular-nums tracking-tight ${isIngreso ? 'text-emerald-600 print:text-black' : 'text-rose-600 print:text-black'}`}>
+                        {isIngreso ? '+' : '-'}{t.amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                      </span>
                     </div>
                   </td>
-                  <td className={`px-6 py-4 print:px-2 print:py-1 border-b border-slate-50 print:border-transparent text-right`}>
-                    <span className={`text-base print:text-[10px] font-black tabular-nums tracking-tight ${isIngreso ? 'text-emerald-600 print:text-black' : 'text-rose-600 print:text-black'}`}>
-                      {isIngreso ? '+' : '-'}{t.amount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 border-b border-slate-50 text-right print:hidden">
+                  <td className="px-4 py-4 border-b border-slate-50 text-right print:hidden">
                     <button
                       onClick={() => setShowDeleteModal(t.id)}
                       className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
@@ -1056,18 +1052,19 @@ function SummaryTab({ transactions, accounts }: any) {
       return [
         format(parseISO(t.date), 'dd/MM/yyyy'),
         t.description + (t.isAutomated ? ' [AUTO]' : ''),
+        t.type === 'Ingreso' ? 'INGRESO' : 'GASTO',
         formattedAmount
       ];
     });
 
-    const totalAccumulated = accountTransactions.reduce((acc: number, t: any) => acc + t.amount, 0);
+    const totalAccumulated = accountTransactions.reduce((acc: number, t: any) => acc + (t.type === 'Ingreso' ? t.amount : -t.amount), 0);
     const formattedTotal = `${totalAccumulated.toLocaleString('de-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 
-    tableData.push(['', 'TOTAL ACUMULADO', formattedTotal]);
+    tableData.push(['', 'TOTAL ACUMULADO', '', formattedTotal]);
 
     autoTable(doc, {
       startY: 25,
-      head: [['Fecha', 'Descripción', 'Importe']],
+      head: [['Fecha', 'Descripción', 'Tipo', 'Importe']],
       body: tableData,
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 1.5, textColor: [40, 40, 40] },
@@ -1075,7 +1072,8 @@ function SummaryTab({ transactions, accounts }: any) {
       columnStyles: {
         0: { cellWidth: 20 },
         1: { cellWidth: 'auto' },
-        2: { cellWidth: 30, halign: 'right' },
+        2: { cellWidth: 20 },
+        3: { cellWidth: 30, halign: 'right' },
       },
       didParseCell: (data) => {
         if (data.row.index === tableData.length - 1) {
@@ -1781,7 +1779,7 @@ function TeamEconomicRow({ team, status, settings, accounts, updateStatus, addTr
             relatedTeamId: team.id,
             isAutomated: true,
             type: 'Ingreso',
-            tag: 'LIGA REGULAR'
+            tag: 'EQUIPOS INSCRIPCION'
           });
         }
       }

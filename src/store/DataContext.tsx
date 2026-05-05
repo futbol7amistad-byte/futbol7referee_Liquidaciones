@@ -330,7 +330,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
               isAutomated: true,
               type: 'Ingreso',
               created_at: new Date().toISOString(),
-              tag: 'LIGA REGULAR'
+              tag: 'EQUIPOS PARTIDOS'
             });
           }
         }
@@ -422,10 +422,28 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       
       // Update team document
       const teamDoc = await getDoc(doc(db, 'seasons', currentSeason.id, 'teams', sanctionData.team_id));
+      let teamName = 'Equipo';
       if (teamDoc.exists()) {
         const teamData = teamDoc.data();
+        teamName = teamData.name || 'Equipo';
         await updateDoc(doc(db, 'seasons', currentSeason.id, 'teams', sanctionData.team_id), {
           pending_amount: Math.max(0, (teamData.pending_amount || 0) - sanctionData.amount)
+        });
+      }
+
+      // Add accounting transaction
+      const penaltyAccount = accounts.find(a => a && a.type === 'Ingreso' && a.name.toLowerCase().includes('sancion'));
+      if (penaltyAccount && sanctionData.amount > 0) {
+        await addDoc(collection(db, 'seasons', currentSeason.id, 'accounting_transactions'), {
+          date: new Date().toISOString().split('T')[0],
+          amount: sanctionData.amount,
+          accountId: penaltyAccount.id,
+          description: `Sanción abonada: ${teamName} - ${sanctionData.reason}`,
+          relatedTeamId: sanctionData.team_id,
+          isAutomated: true,
+          type: 'Ingreso',
+          tag: 'EQUIPOS PENALIZACION',
+          created_at: new Date().toISOString()
         });
       }
     }

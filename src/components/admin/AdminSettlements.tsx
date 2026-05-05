@@ -22,7 +22,7 @@ import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 
 export default function AdminSettlements() {
-  const { matches, referees, teams, economicSettings, error, accounts, addTransaction, refereeAdvances, addRefereeAdvance, deleteRefereeAdvance } = useData();
+  const { matches, referees, teams, economicSettings, error, accounts, addTransaction, refereeAdvances, addRefereeAdvance, deleteRefereeAdvance, venues } = useData();
   
   if (error && error.includes('Quota exceeded') && matches.length === 0) {
     return (
@@ -46,7 +46,7 @@ export default function AdminSettlements() {
   }
 
   const [dateRange, setDateRange] = useState({
-    start: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
+    start: format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'),
     end: format(new Date(), 'yyyy-MM-dd')
   });
 
@@ -65,11 +65,26 @@ export default function AdminSettlements() {
   const venueCosts = economicSettings?.venue_costs ?? [];
 
   const getFieldRate = (fieldName: string) => {
-    if (!fieldName || !venueCosts.length) return 0;
+    if (!fieldName) return 0;
     const normalizedSearch = fieldName.toLowerCase().trim();
-    const venue = venueCosts.find((v: any) => 
-      v.venue_name?.toLowerCase().trim() === normalizedSearch
-    );
+    
+    // First try the venues context
+    const venueDoc = venues?.find(v => {
+      const vName = v.name.toLowerCase().trim();
+      const vNameAbbreviated = vName.replace('montaña pacho', 'mp').trim();
+      return vName === normalizedSearch || vNameAbbreviated === normalizedSearch;
+    });
+    
+    if (venueDoc && venueDoc.match_price !== undefined) {
+      return Number(venueDoc.match_price);
+    }
+    
+    // Fallback to legacy economicSettings
+    const venue = venueCosts.find((v: any) => {
+      const vName = v.venue_name?.toLowerCase().trim() || '';
+      const vNameAbbreviated = vName.replace('montaña pacho', 'mp').trim();
+      return vName === normalizedSearch || vNameAbbreviated === normalizedSearch;
+    });
     return venue ? Number(venue.hourly_rate) : 0;
   };
 
@@ -581,7 +596,7 @@ export default function AdminSettlements() {
         </>
       )}
 
-      {activeView === 'analytics' && <ProfitabilityAnalytics matches={filteredMatches} teams={teams} settings={economicSettings} />}
+      {activeView === 'analytics' && <ProfitabilityAnalytics matches={filteredMatches} teams={teams} settings={economicSettings} venues={venues} />}
       
       {activeView === 'audit' && <AccountingAudit transactions={useData().transactions} accounts={useData().accounts} />}
 
@@ -795,15 +810,29 @@ export default function AdminSettlements() {
   );
 }
 
-function ProfitabilityAnalytics({ matches, teams, settings }: any) {
+function ProfitabilityAnalytics({ matches, teams, settings, venues }: any) {
   const REFEREE_FEE = settings?.referee_payment_standard ?? 25;
   const venueCosts = settings?.venue_costs ?? [];
 
   const getFieldRate = (fieldName: string) => {
-    if (!fieldName || !venueCosts.length) return 0;
-    const venue = venueCosts.find((v: any) => 
-      v.venue_name?.toLowerCase().trim() === fieldName.toLowerCase().trim()
-    );
+    if (!fieldName) return 0;
+    const normalizedSearch = fieldName.toLowerCase().trim();
+    
+    const venueDoc = venues?.find((v: any) => {
+      const vName = v.name.toLowerCase().trim();
+      const vNameAbbreviated = vName.replace('montaña pacho', 'mp').trim();
+      return vName === normalizedSearch || vNameAbbreviated === normalizedSearch;
+    });
+    
+    if (venueDoc && venueDoc.match_price !== undefined) {
+      return Number(venueDoc.match_price);
+    }
+    
+    const venue = venueCosts.find((v: any) => {
+      const vName = v.venue_name?.toLowerCase().trim() || '';
+      const vNameAbbreviated = vName.replace('montaña pacho', 'mp').trim();
+      return vName === normalizedSearch || vNameAbbreviated === normalizedSearch;
+    });
     return venue ? Number(venue.hourly_rate) : 0;
   };
 

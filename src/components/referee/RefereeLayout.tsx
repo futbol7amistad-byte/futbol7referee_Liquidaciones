@@ -12,7 +12,7 @@ export default function RefereeLayout({ children }: { children: React.ReactNode 
 
   // Calculate counters for today
   const today = new Date().toISOString().split('T')[0];
-  const myMatches = matches.filter(m => m.referee_id === user?.id && m.match_date === today);
+  const myMatches = matches.filter(m => m.referee_id === user?.id && m.match_date === today && m.status === 'Liquidado');
   
   let collectedToday = 0;
   myMatches.forEach(match => {

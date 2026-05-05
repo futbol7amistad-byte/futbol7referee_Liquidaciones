@@ -140,19 +140,29 @@ export default function AdminPayments() {
          const rawMotivo = effectivePayment?.reason || 'Transferencia';
 
          let displayMotivo = (rawMotivo === 'Liquidación Administrador' ? 'Transferencia' : rawMotivo);
-         if (paidPayment) {
+
+         // We only show it as Metálico if the referee explicitly marked it, or if paidPayment has reason Metálico.
+         // If a transfer is marked, it should have the actual reason (e.g. 'Transferencia')
+         if (paidPayment && paidPayment.reason === 'Metálico') {
             displayMotivo = 'Metálico';
+         } else if (paidPayment && paidPayment.reason) {
+            displayMotivo = paidPayment.reason;
+         } else if (paidPayment) {
+            displayMotivo = 'Transferencia'; // Default to Transferencia if admin marked it without reason
          }
 
          return {
            ...item,
            pagado: !!paidPayment,
            fechaPago: paidPayment?.created_at ? format(new Date(paidPayment.created_at), 'dd/MM/yyyy') : '',
-           motivo: displayMotivo
+           motivo: displayMotivo,
+           reason: paidPayment?.reason || ''
          }
-      })
-      .filter(item => !item.pagado);
+      });
   }, [matches, payments, teams, referees]);
+
+  const pendientes = impagos.filter(item => !item.pagado);
+  const historico = impagos.filter(item => item.motivo !== 'Metálico');
 
   const handleLiquidate = async (item: any) => {
     console.log('Liquidating:', item);
@@ -527,7 +537,7 @@ export default function AdminPayments() {
               {sortedDates.map(date => {
                 const dayMatches = matchesByDate[date].filter(m => m.status === 'Liquidado');
                 const totalAmount = uniquePayments
-                  .filter(p => dayMatches.some(m => m.id === p.match_id) && p.is_paid)
+                  .filter(p => dayMatches.some(m => m.id === p.match_id) && p.is_paid && p.reason === 'Metálico')
                   .reduce((sum, p) => sum + p.amount, 0);
                 const isExpanded = expandedDate === date;
                 return (
@@ -552,7 +562,7 @@ export default function AdminPayments() {
                       <div className="mt-5 space-y-4 pt-4 border-t border-slate-200/50">
                         {Array.from(new Set(dayMatches.map(m => m.referee_id))).map((refId, idx) => {
                           const ref = referees.find(r => r.id === refId);
-                          const refMatches = dayMatches.filter(m => m.referee_id === refId);
+                          const refMatches = dayMatches.filter(m => m.referee_id === refId).sort((a, b) => a.match_time.localeCompare(b.match_time));
                           return (
                             <div key={`ref-${refId || 'no-id'}-${idx}`} className="space-y-3">
                               <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest flex items-center">
@@ -564,12 +574,16 @@ export default function AdminPayments() {
                                 const teamB = teams.find((t: any) => t.id === m.team_b_id)?.name || 'Desconocido';
                                 const paymentA = uniquePayments.find(p => p.match_id === m.id && p.team_id === m.team_a_id);
                                 const paymentB = uniquePayments.find(p => p.match_id === m.id && p.team_id === m.team_b_id);
-                                const totalPagado = (paymentA?.is_paid ? 35 : 0) + (paymentB?.is_paid ? 35 : 0);
+                                const isCash = (p: any) => p?.is_paid && p?.reason === 'Metálico';
+                                const totalPagado = (isCash(paymentA) ? 35 : 0) + (isCash(paymentB) ? 35 : 0);
 
                                 // Determinar estado de liquidación para el equipo
                                 const getTeamColor = (payment: any) => {
                                   if (m.status !== 'Liquidado') return 'text-slate-900';
-                                  return payment?.is_paid ? 'text-emerald-600' : 'text-red-500';
+                                  if (payment?.is_paid) {
+                                      return payment.reason === 'Metálico' ? 'text-emerald-600' : 'text-blue-500';
+                                  }
+                                  return 'text-red-500';
                                 };
 
                                 return (
@@ -617,10 +631,15 @@ export default function AdminPayments() {
           {isResumenOpen && (
             <div className="p-6 pt-0 border-t border-slate-50 space-y-4">
               {[...referees].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())).map((ref, idx) => {
-                const refMatches = filteredMatches.filter(m => m.referee_id === ref.id);
+                const refMatches = filteredMatches.filter(m => m.referee_id === ref.id).sort((a, b) => {
+                  const dateA = new Date(a.match_date).getTime();
+                  const dateB = new Date(b.match_date).getTime();
+                  if (dateA !== dateB) return dateA - dateB;
+                  return a.match_time.localeCompare(b.match_time);
+                });
                 const liquidatedMatches = refMatches.filter(m => m.status === 'Liquidado');
                 const totalAmount = uniquePayments
-                  .filter(p => liquidatedMatches.some(m => m.id === p.match_id) && p.is_paid)
+                  .filter(p => liquidatedMatches.some(m => m.id === p.match_id) && p.is_paid && p.reason === 'Metálico')
                   .reduce((sum, p) => sum + p.amount, 0);
                 const isExpanded = expandedRefereeId === ref.id;
                 const delivery = deliveries.find(d => d.referee_id === ref.id && d.period === selectedPeriod && d.amount >= totalAmount);
@@ -692,12 +711,16 @@ export default function AdminPayments() {
                                     const teamB = teams.find((t: any) => t.id === m.team_b_id)?.name || 'Desconocido';
                                     const paymentA = uniquePayments.find(p => p.match_id === m.id && p.team_id === m.team_a_id);
                                     const paymentB = uniquePayments.find(p => p.match_id === m.id && p.team_id === m.team_b_id);
-                                    const totalPagado = (paymentA?.is_paid ? 35 : 0) + (paymentB?.is_paid ? 35 : 0);
+                                    const isCash = (p: any) => p?.is_paid && p?.reason === 'Metálico';
+                                    const totalPagado = (isCash(paymentA) ? 35 : 0) + (isCash(paymentB) ? 35 : 0);
                                     
                                     // Determinar estado de liquidación para el equipo
                                     const getTeamColor = (payment: any) => {
                                       if (m.status !== 'Liquidado') return 'text-slate-900';
-                                      return payment?.is_paid ? 'text-emerald-600' : 'text-red-500';
+                                      if (payment?.is_paid) {
+                                          return payment.reason === 'Metálico' ? 'text-emerald-600' : 'text-blue-500';
+                                      }
+                                      return 'text-red-500';
                                     };
 
                                     return (
@@ -756,8 +779,8 @@ export default function AdminPayments() {
                 ))}
               </div>
               {activeTab === 'Periodo Actual' && renderTable(impagos.filter(i => !i.pagado && i.period === selectedPeriod), 'actual')}
-              {activeTab === 'Seguimiento' && renderTable(impagos, 'seguimiento')}
-              {activeTab === 'Histórico' && renderTable(impagos, 'historico')}
+              {activeTab === 'Seguimiento' && renderTable(pendientes, 'seguimiento')}
+              {activeTab === 'Histórico' && renderTable(historico, 'historico')}
             </div>
           )}
         </div>
