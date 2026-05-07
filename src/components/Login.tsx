@@ -17,6 +17,8 @@ export default function Login() {
 
   // Background Image (Hyperrealistic football stadium at sunset or grass with lights)
   const bgImgUrl = "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&q=80&w=2000";
+  // Imagen específica para el login de árbitros
+  const refereeBgUrl = "/referee-bg.jpg";
 
   const handleRefereeLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,13 +62,13 @@ export default function Login() {
             className="flex-1 flex flex-col items-center justify-center relative z-10 w-full"
           >
             {/* Background for form screens */}
-            <div className="absolute inset-0 z-0 w-full h-full">
+            <div className={`absolute top-0 left-0 right-0 z-0 w-full transition-all duration-700 ease-in-out ${view === 'intro' ? 'h-full' : 'h-[55dvh] md:h-full'}`}>
                <img 
-                  src={bgImgUrl}
-                  alt="Stadium"
-                  className={`w-full h-full object-cover transition-opacity duration-700 ${view === 'intro' ? 'opacity-60' : 'opacity-100'}`}
+                  src={view === 'referee' ? refereeBgUrl : bgImgUrl}
+                  alt="Background"
+                  className={`w-full h-full object-cover md:object-center transition-opacity duration-700 ${view === 'intro' ? 'opacity-60' : 'opacity-100'} ${view === 'referee' ? 'object-top' : 'object-bottom'}`}
                />
-               <div className={`absolute inset-0 transition-opacity duration-700 ${view === 'intro' ? 'bg-slate-950/70 backdrop-blur-sm md:backdrop-blur-none' : 'bg-gradient-to-b from-slate-900/50 via-transparent to-slate-900/40'}`}></div>
+               <div className={`absolute inset-0 transition-opacity duration-700 ${view === 'intro' ? 'bg-slate-950/70 backdrop-blur-sm md:backdrop-blur-none' : 'bg-gradient-to-b from-slate-900/10 via-transparent to-slate-950'}`}></div>
             </div>
 
             {/* Container for forms */}

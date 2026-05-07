@@ -132,6 +132,35 @@
         "created_at": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "seasonId", "date", "amount", "accountId", "type"]
+    },
+    "MatchPayment": {
+      "title": "Match Payment",
+      "description": "Payment made by a team for a specific match.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "team_id": { "type": "string" },
+        "amount": { "type": "number" },
+        "is_paid": { "type": "boolean" },
+        "reason": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "match_id", "team_id", "amount", "is_paid"]
+    },
+    "CashDelivery": {
+      "title": "Cash Delivery",
+      "description": "Cash delivered by a referee to the administration.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "referee_id": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date" },
+        "notes": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "referee_id", "amount", "date"]
     }
   },
   "firestore": {
@@ -154,6 +183,14 @@
     "/seasons/{seasonId}/matches/{matchId}": {
       "schema": "Match",
       "description": "Collection of matches for a season."
+    },
+    "/seasons/{seasonId}/payments/{paymentId}": {
+      "schema": "MatchPayment",
+      "description": "Payments associated with matches."
+    },
+    "/seasons/{seasonId}/deliveries/{deliveryId}": {
+      "schema": "CashDelivery",
+      "description": "Cash deliveries from referees."
     },
     "/seasons/{seasonId}/accounting_accounts/{accountId}": {
       "schema": "AccountingAccount",

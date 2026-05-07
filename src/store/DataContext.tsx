@@ -179,7 +179,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       handleError
     );
 
-    // Administrative collections only loaded for admins/collaborators
+    // Administrative and personal collections loaded for admins/collaborators
+    // Referees specifically need payments, deliveries and advances to manage their own data
     let unsubPayments = () => {};
     let unsubDeliveries = () => {};
     let unsubSanctions = () => {};
@@ -188,7 +189,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     let unsubTransactions = () => {};
     let unsubTeamEconomic = () => {};
 
-    if (user && ['admin', 'collaborator'].includes(user.role)) {
+    if (user && ['admin', 'collaborator', 'referee'].includes(user.role)) {
       unsubPayments = onSnapshot(collection(seasonRef, 'payments'), 
         (snapshot) => setPayments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MatchPayment))),
         handleError
@@ -197,12 +198,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         (snapshot) => setDeliveries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CashDelivery))),
         handleError
       );
-      unsubSanctions = onSnapshot(collection(seasonRef, 'sanctions'), 
-        (snapshot) => setSanctions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sanction))),
-        handleError
-      );
       unsubRefereeAdvances = onSnapshot(collection(seasonRef, 'referee_advances'),
         (snapshot) => setRefereeAdvances(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RefereeAdvance))),
+        handleError
+      );
+    }
+
+    if (user && ['admin', 'collaborator'].includes(user.role)) {
+      unsubSanctions = onSnapshot(collection(seasonRef, 'sanctions'), 
+        (snapshot) => setSanctions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sanction))),
         handleError
       );
       unsubAccounts = onSnapshot(collection(seasonRef, 'accounting_accounts'), 

@@ -1,5 +1,6 @@
 {
-  "name": "Gestión Árbitros Fútbol 7",
+  "name": "Futbol 7 Planner PRO",
   "description": "Aplicación para la gestión de árbitros, partidos y pagos de campeonatos de Fútbol 7 amateur.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": []
 }
