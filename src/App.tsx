@@ -31,8 +31,6 @@ import RefereeMatches from './components/referee/RefereeMatches';
 import PublicCalendar from './components/PublicCalendar';
 import Footer from './components/Footer';
 
-import IntroScreen from './components/IntroScreen';
-
 function PrivateRoute({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: Role[] }) {
   const { user } = useAuth();
   

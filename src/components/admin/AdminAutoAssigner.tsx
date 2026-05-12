@@ -9,6 +9,8 @@ import { doc, writeBatch } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { formatDateDisplay } from '../../utils/formatters';
 
+import { getDayName } from '../../services/auto_assigner/Constraints';
+
 export default function AdminAutoAssigner() {
   const { currentSeason } = useSeason();
   const { matches: matchesRaw, referees, teams, assignmentResults, setAssignmentResults, hiddenPeriods, settings, updateSettings, venues } = useData();
@@ -187,7 +189,15 @@ export default function AdminAutoAssigner() {
 
     // Obtener historial del mes actual (partidos asiganados previamente que no sean de esta semana u otro criterio)
     // Para simplificar, pasamos los partidos que YA tengan asignado este árbitro
-    const historyMatches = matchesRaw.filter(m => m.referee_id && m.referee_id !== '' && m.referee_id !== 'r-unassigned' && m.referee_id !== 'SIN ASIGNAR' && m.referee_id !== 'r-0');
+    const historyMatches = matchesRaw.filter(m => 
+      m.referee_id && 
+      m.referee_id !== '' && 
+      m.referee_id !== 'r-unassigned' && 
+      m.referee_id !== 'SIN ASIGNAR' && 
+      m.referee_id !== 'r-0' &&
+      m.status !== 'Suspendido' &&
+      m.status !== 'Aplazado'
+    );
 
     const effectiveWeeklySlots: Record<string, Record<string, number>> = {};
     
@@ -262,7 +272,6 @@ export default function AdminAutoAssigner() {
 
   const refereeSummary = useMemo(() => {
     const summary: Record<string, { id: string, name: string, matches: number, matchesPerDay: Record<string, number> }> = {};
-    if (!assignmentResults) return [];
 
     // Initialize all active referees
     referees.forEach(ref => {
@@ -272,24 +281,44 @@ export default function AdminAutoAssigner() {
         }
     });
 
-    assignmentResults.forEach(res => {
-        if (!res.refereeId) return;
-        const ref = referees.find(r => r.id === res.refereeId);
-        const match = matches.find(m => m.id === res.matchId);
-        if (!ref || !match) return;
-
-        if (!summary[ref.id]) {
-            const matchesPerDayInit = days.reduce((acc, day) => { acc[day] = 0; return acc; }, {} as Record<string, number>);
-            summary[ref.id] = { id: ref.id, name: ref.name, matches: 0, matchesPerDay: matchesPerDayInit };
-        }
-        summary[ref.id].matches += 1;
-        if (match.day_name) {
-            const normDay = match.day_name.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            const foundDay = days.find(d => d.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === normDay);
-            if (foundDay) {
-                summary[ref.id].matchesPerDay[foundDay] = (summary[ref.id].matchesPerDay[foundDay] || 0) + 1;
+    matches.forEach(match => {
+        let refIdToCount: string | null = null;
+        
+        if (assignmentResults && assignmentResults.length > 0) {
+            const autoAssignedResult = assignmentResults.find(r => r.matchId === match.id);
+            if (autoAssignedResult) {
+                if (autoAssignedResult.refereeId) {
+                    refIdToCount = autoAssignedResult.refereeId;
+                }
+            } else if (match.referee_id && match.referee_id !== 'r-unassigned' && match.referee_id !== 'SIN ASIGNAR' && match.referee_id !== 'r-0') {
+                refIdToCount = match.referee_id;
+            }
+        } else {
+             if (match.referee_id && match.referee_id !== 'r-unassigned' && match.referee_id !== 'SIN ASIGNAR' && match.referee_id !== 'r-0') {
+                refIdToCount = match.referee_id;
             }
         }
+
+        if (refIdToCount) {
+             const ref = referees.find(r => r.id === refIdToCount);
+             if (ref) {
+                 if (!summary[ref.id]) {
+                     const matchesPerDayInit = days.reduce((acc, day) => { acc[day] = 0; return acc; }, {} as Record<string, number>);
+                     summary[ref.id] = { id: ref.id, name: ref.name, matches: 0, matchesPerDay: matchesPerDayInit };
+                 }
+                 summary[ref.id].matches += 1;
+                 
+                 const actualDay = match.day_name || getDayName(match.match_date);
+
+                 if (actualDay) {
+                     const normDay = actualDay.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                     const foundDay = days.find(d => d.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === normDay);
+                     if (foundDay) {
+                         summary[ref.id].matchesPerDay[foundDay] = (summary[ref.id].matchesPerDay[foundDay] || 0) + 1;
+                     }
+                 }
+             }
+         }
     });
 
     return Object.values(summary).sort((a,b) => a.name.localeCompare(b.name));
@@ -409,15 +438,13 @@ export default function AdminAutoAssigner() {
                 </button>
             )}
             
-            {assignmentResults.length > 0 && (
-                <button 
-                    onClick={() => setShowSummaryModal(true)}
-                    disabled={loading}
-                    className="px-8 py-4 bg-emerald-500 text-white rounded-xl font-black text-sm uppercase shadow-lg hover:bg-emerald-600 transition-all flex items-center gap-3 disabled:opacity-50"
-                >
-                    <Calendar className="w-5 h-5"/> Ver Resumen de Asignación
-                </button>
-            )}
+            <button 
+                onClick={() => setShowSummaryModal(true)}
+                disabled={loading}
+                className="px-8 py-4 bg-emerald-500 text-white rounded-xl font-black text-sm uppercase shadow-lg hover:bg-emerald-600 transition-all flex items-center gap-3 disabled:opacity-50"
+            >
+                <Calendar className="w-5 h-5"/> Ver Resumen de Asignación
+            </button>
         </div>
       </div>
 
@@ -506,15 +533,15 @@ export default function AdminAutoAssigner() {
 
                 <div className="flex-1 overflow-auto mb-6 custom-scrollbar rounded-2xl border border-blue-100 shadow-inner bg-slate-50/50">
                     <table className="min-w-full divide-y divide-blue-50 table-fixed">
-                        <thead className="bg-blue-50/30 sticky top-0 z-20 shadow-sm">
+                        <thead className="bg-slate-100 sticky top-0 z-20 shadow-sm border-b border-slate-200">
                             <tr>
-                                <th className="px-5 py-4 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest w-48 shrink-0 bg-blue-50/30">Árbitro</th>
+                                <th className="px-5 py-4 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest w-48 shrink-0 bg-slate-100">Árbitro</th>
                                 {days.map(day => (
-                                    <th key={day} className="px-4 py-4 text-center text-[10px] font-black text-slate-500 uppercase tracking-widest w-28 bg-blue-50/30">
+                                    <th key={day} className="px-4 py-4 text-center text-[10px] font-black text-slate-500 uppercase tracking-widest w-28 bg-slate-100">
                                         {day}
                                     </th>
                                 ))}
-                                <th className="px-4 py-4 text-center text-[10px] font-black text-indigo-600 uppercase tracking-widest w-28 bg-blue-100/30">Total</th>
+                                <th className="px-4 py-4 text-center text-[10px] font-black text-indigo-600 uppercase tracking-widest w-28 bg-indigo-50">Total</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-blue-50">
@@ -570,19 +597,21 @@ export default function AdminAutoAssigner() {
                         Cancelar
                     </button>
                     <button 
-                        onClick={() => { setShowSummaryModal(false); handleProcess(true); }}
+                        onClick={() => { handleProcess(true); }}
                         disabled={loading}
                         className="px-6 py-3.5 bg-white text-slate-700 rounded-xl font-black text-xs uppercase shadow-sm border border-slate-200 hover:bg-slate-50 transition-all flex items-center gap-2 disabled:opacity-50"
                     >
                         <Upload className="w-4 h-4 rotate-180"/> Intentar Otra Combinación
                     </button>
-                    <button 
-                        onClick={handleConfirm}
-                        disabled={loading}
-                        className="px-6 py-3.5 bg-emerald-500 text-white rounded-xl font-black text-xs uppercase shadow-md hover:bg-emerald-600 transition-colors flex items-center gap-2 disabled:opacity-50"
-                    >
-                        {loading ? 'Guardando...' : <><Check className="w-4 h-4"/> Confirmar y Guardar</>}
-                    </button>
+                    {assignmentResults.length > 0 && (
+                        <button 
+                            onClick={handleConfirm}
+                            disabled={loading}
+                            className="px-6 py-3.5 bg-emerald-500 text-white rounded-xl font-black text-xs uppercase shadow-md hover:bg-emerald-600 transition-colors flex items-center gap-2 disabled:opacity-50"
+                        >
+                            {loading ? 'Guardando...' : <><Check className="w-4 h-4"/> Confirmar y Guardar</>}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

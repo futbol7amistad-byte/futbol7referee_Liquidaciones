@@ -628,7 +628,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const updateMatchStatus = async (matchId: string, status: 'Programado' | 'Liquidado' | 'Suspendido' | 'Aplazado') => {
     if (!currentSeason) return;
-    await updateDoc(doc(db, 'seasons', currentSeason.id, 'matches', matchId), { status });
+    
+    const updates: any = { status };
+    if (status === 'Suspendido' || status === 'Aplazado') {
+      updates.referee_id = 'SIN ASIGNAR';
+    }
+    
+    await updateDoc(doc(db, 'seasons', currentSeason.id, 'matches', matchId), updates);
     
     // Auto-generate accounting entries (Sync handles both creation and correction/rollback)
     await syncMatchAccounting(matchId);

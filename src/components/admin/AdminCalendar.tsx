@@ -244,7 +244,7 @@ export default function AdminCalendar() {
           
         // Normal assignment logic
         // Check if referee already has matches that day (exclude the match they are being dropped into if they were somehow already there, and exclude origin if they were just moved)
-        const hasMatchThatDay = matches.some(m => m.match_date === targetMatch.match_date && m.referee_id === draggingRefereeId && m.id !== draggingOriginMatchId);
+        const hasMatchThatDay = matches.some(m => m.match_date === targetMatch.match_date && m.referee_id === draggingRefereeId && m.id !== draggingOriginMatchId && m.status !== 'Suspendido' && m.status !== 'Aplazado');
         
         if (hasMatchThatDay) {
           const refName = referees.find(r => r.id === draggingRefereeId)?.name || 'Este árbitro';
@@ -263,7 +263,9 @@ export default function AdminCalendar() {
           m.field === targetMatch.field &&
           m.referee_id === targetMatch.referee_id &&
           m.referee_id !== '' &&
-          m.referee_id !== 'r-unassigned'
+          m.referee_id !== 'r-unassigned' &&
+          m.status !== 'Suspendido' &&
+          m.status !== 'Aplazado'
         );
 
         if (consecutive) {
@@ -670,6 +672,8 @@ export default function AdminCalendar() {
           const field = getVal(['Campo', 'Lugar', 'Pista', 'Cancha', 'Instalación', 'Instalacion', 'Sede']);
           let competition = getVal(['Categoría', 'Categoria', 'Division', 'División', 'Competicion', 'Competición', 'Grupo']);
           
+          const round = getVal(['Jornada', 'Semana', 'Round']);
+          
           if (!competition) {
              const nameToSearch = `${teamAName} ${teamBName}`.toUpperCase();
              if (nameToSearch.includes('SENIOR+') || nameToSearch.includes('SENIOR +')) {
@@ -684,7 +688,6 @@ export default function AdminCalendar() {
                competition = round;
              }
           }
-          const round = getVal(['Jornada', 'Semana', 'Round']);
           const time = getVal(['Hora', 'Horario']);
           const dayNameRaw = getVal(['Dia de la Semana', 'Día de la Semana', 'Dia', 'Día', 'Día Sem.', 'Dia Sem']);
           const dateRaw = getVal(['Fecha', 'Date']);
@@ -895,7 +898,9 @@ export default function AdminCalendar() {
       m.id !== reassignMatch.id &&
       m.match_date === reassignMatch.match_date &&
       m.field === reassignMatch.field &&
-      m.referee_id === reassignMatch.referee_id
+      m.referee_id === reassignMatch.referee_id &&
+      m.status !== 'Suspendido' &&
+      m.status !== 'Aplazado'
     );
 
     console.log('consecutive match found:', consecutive);
@@ -1712,7 +1717,7 @@ export default function AdminCalendar() {
                     <option value="">-- Seleccionar campo limpio --</option>
                     {[...new Set(matchesRaw.map(x => x.field).filter(Boolean) as string[])]
                       .sort((a, b) => (a || '').localeCompare(b || ''))
-                      .filter(f => !matchesRaw.some(x => x.id !== matchToEditField.id && x.field === f && x.match_date === matchToEditField.match_date && x.match_time === matchToEditField.match_time))
+                      .filter(f => !matchesRaw.some(x => x.id !== matchToEditField.id && x.field === f && x.match_date === matchToEditField.match_date && x.match_time === matchToEditField.match_time && x.status !== 'Suspendido' && x.status !== 'Aplazado'))
                       .map((f, i) => (
                         <option key={`f-${i}-${f}`} value={f}>{f}</option>
                     ))}

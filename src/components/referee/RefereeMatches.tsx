@@ -41,7 +41,7 @@ export default function RefereeMatches() {
   };
 
   const myMatches = matches
-    .filter(m => m.referee_id === user?.id || (referees.find(r => r.id === m.referee_id)?.name === user?.name))
+    .filter(m => (m.referee_id === user?.id || (referees.find(r => r.id === m.referee_id)?.name === user?.name)) && m.status !== 'Suspendido' && m.status !== 'Aplazado')
     .sort((a, b) => {
       const dateA = new Date(`${a.match_date}T${a.match_time || '00:00'}`).getTime();
       const dateB = new Date(`${b.match_date}T${b.match_time || '00:00'}`).getTime();

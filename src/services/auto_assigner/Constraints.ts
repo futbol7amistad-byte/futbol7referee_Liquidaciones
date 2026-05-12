@@ -3,9 +3,11 @@ import { Match, Referee } from "../../types";
 import { AssignmentSession } from "./types";
 
 export const getDayName = (dateStr: string): string => {
-    const daysMap = ["Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sábado"];
+    if (!dateStr) return '';
     const date = new Date(dateStr);
-    return daysMap[date.getDay()];
+    if (isNaN(date.getTime())) return '';
+    const daysMap = ["Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sábado"];
+    return daysMap[date.getDay()] || '';
 };
 
 export const normalizeString = (s: any) => {

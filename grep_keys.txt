@@ -1,0 +1,120 @@
+src/components/admin/AdminPayments.tsx:              <div key={`m-${m.id || 'no-id'}-${index}`} className="p-3 bg-gray-50 rounded-lg text-sm border border-gray-200">
+src/components/admin/AdminPayments.tsx:                <React.Fragment key={`impago-${i.id}-${index}`}>
+src/components/admin/AdminPayments.tsx:                                      <div key={`pending-${pending.id || 'no-id'}-${pendingIndex}`} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm gap-4 hover:border-indigo-200 hover:shadow-md transition-all">
+src/components/admin/AdminPayments.tsx:              {periods.map(p => <option key={p as string} value={p as string}>{formatPeriod(p as string)}</option>)}
+src/components/admin/AdminPayments.tsx:                  <div key={`d-${date}`} className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
+src/components/admin/AdminPayments.tsx:                            <div key={`ref-${refId || 'no-id'}-${idx}`} className="space-y-3">
+src/components/admin/AdminPayments.tsx:                                  <div key={`m-${m.id || 'no-id'}-${mIdx}`} className="flex justify-between items-center p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
+src/components/admin/AdminPayments.tsx:                  <div key={`summary-${ref.id || 'no-id'}-${idx}`} className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-4">
+src/components/admin/AdminPayments.tsx:                            <div key={`mdate-${date}`} className="bg-white p-4 rounded-[1.5rem] border border-slate-100 shadow-sm">
+src/components/admin/AdminPayments.tsx:                                      <div key={`mdate-${m.id || 'no-id'}-${mDateIndex}`} className="flex justify-between items-center p-2.5 bg-slate-50/50 rounded-xl border border-slate-100 text-[11px] font-bold">
+src/components/admin/AdminPayments.tsx:                    key={tab} 
+src/components/admin/AdminAutoAssigner.tsx:                <option key="all-visible" value="all">Todos (Visibles)</option>
+src/components/admin/AdminAutoAssigner.tsx:                    <option key={`period-opt-${idx}`} value={p}>
+src/components/admin/AdminAutoAssigner.tsx:                    <div key={day} className={`p-4 rounded-xl border transition-all duration-300 hover:scale-105 hover:shadow-xl cursor-default ${deficit ? 'bg-rose-50 border-rose-200 hover:shadow-rose-500/20 shadow-md shadow-rose-100' : 'bg-slate-50 border-slate-100 hover:shadow-indigo-500/10'}`}>
+src/components/admin/AdminAutoAssigner.tsx:                        <tr key={`${res.matchId}-${index}`} className="hover:bg-slate-50 border-b border-slate-50 last:border-0">
+src/components/admin/AdminAutoAssigner.tsx:                                    <th key={day} className="px-4 py-4 text-center text-[10px] font-black text-slate-500 uppercase tracking-widest w-28 bg-slate-100">
+src/components/admin/AdminAutoAssigner.tsx:                                <tr key={`sum-ref-${ref.id || 'no-id'}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
+src/components/admin/AdminAutoAssigner.tsx:                                        <td key={day} className="px-4 py-3 text-center text-sm font-bold text-slate-700">
+src/components/admin/AdminAutoAssigner.tsx:                                        <td key={`total-${day}`} className="px-4 py-4 text-center text-sm font-black text-slate-800">
+src/components/admin/AdminAutoAssigner.tsx:                                    <th key={day} className="px-4 py-4 text-center text-[10px] font-black text-slate-500 uppercase tracking-widest w-28 bg-slate-50">
+src/components/admin/AdminAutoAssigner.tsx:                                <tr key={`cfg-ref-${ref.id || 'no-id'}-${idx}`} className={`hover:bg-slate-50/80 transition-colors ${isInactive ? 'opacity-50 grayscale bg-slate-50' : ''}`}>
+src/components/admin/AdminAutoAssigner.tsx:                                            <td key={day} className="px-4 py-2 text-center">
+src/components/admin/AdminAutoAssigner.tsx:                                        <td key={`total-${day}`} className={`px-4 py-4 text-center text-sm font-black ${colTotal === 0 ? 'text-rose-500' : 'text-slate-800'}`}>
+src/components/admin/AdminUtilities.tsx:              <option key={`clone-${c.id || 'no-id'}-${idx}`} value={c.id}>Clonar: {c.name}</option>
+src/components/admin/AdminUtilities.tsx:            <div key={`comp-main-${comp.id || 'no-id'}-${compIdx}`} className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
+src/components/admin/AdminUtilities.tsx:                            {Object.keys(ICONS).map(k => <option key={k} value={k}>{k}</option>)}
+src/components/admin/AdminUtilities.tsx:                            <div key={`cat-sub-${cat.id || 'no-id'}-${catIdx}`} className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+src/components/admin/AdminUtilities.tsx:                                            <React.Fragment key={`div-${div.id || 'no-id'}-${divIdx}`}>
+src/components/admin/AdminUtilities.tsx:                                  <div key={v.venue_name} className="flex items-center justify-between bg-slate-50 border border-slate-200 p-3 rounded-xl gap-4">
+src/components/admin/AdminUnpaid.tsx:                <li key={`unp-${payment.id || 'no-id'}-${idx}`} className="p-4 sm:px-6 hover:bg-gray-50">
+src/components/admin/AdminDashboard.tsx:          <div key={`stat-${stat.title.replace(/\s+/g, '-')}-${index}`} className="group bg-white rounded-[2rem] p-6 shadow-sm border border-slate-200 hover:border-emerald-500 transition-all hover:shadow-xl relative overflow-hidden active:scale-[0.99]">
+src/components/admin/AdminEquity.tsx:                  <th key={`equ-th-${t.id}-${idx}`} className="px-4 py-4 font-black uppercase tracking-widest text-slate-400 border-b border-slate-200 text-center min-w-[60px]">{t.name}</th>
+src/components/admin/AdminEquity.tsx:                  key={`equ-tr-${r.id}-${index}`} 
+src/components/admin/AdminEquity.tsx:                        key={`equ-td-${t.id}-${idx}`} 
+src/components/admin/CalendarGenerator.tsx:                     {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => <div key={d} className="text-center font-bold text-[10px] text-slate-500 uppercase">{d}</div>)}
+src/components/admin/CalendarGenerator.tsx:                           key={`cal-day-${day.toISOString()}-${dIdx}`}
+src/components/admin/CalendarGenerator.tsx:                              <span key={i} className="px-2 py-0.5 bg-rose-500/10 border border-rose-500/20 rounded text-[10px] text-rose-400">
+src/components/admin/CalendarGenerator.tsx:                               key={venue.id}
+src/components/admin/AdminCalendar.tsx:            {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => <div key={d} className="text-center font-bold text-xs text-gray-400">{d}</div>)}
+src/components/admin/AdminCalendar.tsx:                key={`cal-day-${day.toISOString()}-${dIdx}`}
+src/components/admin/AdminCalendar.tsx:                    <tr key={`temp-${i}`} className="text-xs font-medium text-gray-600">
+src/components/admin/AdminCalendar.tsx:                  <option key={`ref-${ref.id || 'no-id'}-${idx}`} value={ref.id}>{ref.name}</option>
+src/components/admin/AdminCalendar.tsx:                    <div key={`sel-${match.id || 'no-id'}-${smIndex}`} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
+src/components/admin/AdminCalendar.tsx:                  <option key={p} value={p}>{p === 'Sin periodo' ? 'Sin periodo' : p.split('_to_').map(formatDateDisplay).join(' al ')}</option>
+src/components/admin/AdminCalendar.tsx:                  key={`drag-${ref.id || 'no-id'}-${idx}`}
+src/components/admin/AdminCalendar.tsx:            <div key={`p-${period}`} className="mb-8">
+src/components/admin/AdminCalendar.tsx:                          key={`grid-${m.id || 'no-id'}-${index}`} 
+src/components/admin/AdminCalendar.tsx:                        <option key={`f-${i}-${f}`} value={f}>{f}</option>
+src/components/admin/AdminCalendar.tsx:                          <option key={`mref-${ref.id || 'no-id'}-${idx}`} value={ref.id}>{ref.name}</option>
+src/components/admin/AdminCalendar.tsx:                      <tr key={`load-${ref.id || 'no-id'}-${idx}`} className="group hover:bg-slate-50 transition-colors">
+src/components/admin/AdminLayoutContainer.tsx:              key={item.name} 
+src/components/admin/AdminLayoutContainer.tsx:                <option key={s.id} value={s.id}>
+src/components/admin/AdminLayoutContainer.tsx:                key={item.groupName} 
+src/components/admin/AdminLayoutContainer.tsx:                key={item.name} 
+src/components/admin/AdminLayoutContainer.tsx:                    <option key={s.id} value={s.id}>
+src/components/admin/AdminLayoutContainer.tsx:                    key={item.groupName} 
+src/components/admin/AdminLayoutContainer.tsx:                    key={item.name} 
+src/components/admin/AdminTeams.tsx:                          <tr key={`team-row-${team.id}-${index}`} className="hover:bg-slate-50/20 transition-all">
+src/components/admin/AdminTeams.tsx:                        <div key={`sanc-${sanction.id || 'no-id'}-${sIdx}`} className="flex flex-col sm:flex-row sm:items-center justify-between p-6 bg-slate-50/50 rounded-3xl border border-slate-100 group transition-all hover:bg-white hover:shadow-app hover:border-white">
+src/components/admin/AdminTeams.tsx:                      <div key={day} className="border border-slate-200 p-3 rounded-xl bg-slate-50">
+src/components/admin/AdminTeams.tsx:                              key={`${day}-${hour}`}
+src/components/admin/AdminTeams.tsx:                        key={venue.id}
+src/components/admin/AdminTeams.tsx:                    <option key={t.id} value={t.id}>{t.name}</option>
+src/components/admin/AdminEconomic.tsx:              key={tab.id}
+src/components/admin/AdminEconomic.tsx:                <option key={tag} value={tag}>{tag}</option>
+src/components/admin/AdminEconomic.tsx:                  key={`econ-tx-${t.id}-${index}`} 
+src/components/admin/AdminEconomic.tsx:                      key={type}
+src/components/admin/AdminEconomic.tsx:                    <option key={`ae-acc-${a.id || 'no-id'}-${aIdx}`} value={a.id}>{a.code} - {a.name}</option>
+src/components/admin/AdminEconomic.tsx:                    <option key={tag} value={tag}>{tag}</option>
+src/components/admin/AdminEconomic.tsx:                    <option key={`ae-per-${pIdx}`} value={p}>{formatPeriodRange(p)}</option>
+src/components/admin/AdminEconomic.tsx:                            key={`ae-acc-in-${acc.id || 'no-id'}-${aIdx}`} 
+src/components/admin/AdminEconomic.tsx:                            key={`ae-acc-out-${acc.id || 'no-id'}-${aIdx}`} 
+src/components/admin/AdminEconomic.tsx:                  <tr key={`econ-tx2-${t.id}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
+src/components/admin/AdminEconomic.tsx:                  key={`ae-ttr-${team.id || 'no-id'}-${tIdx}`}
+src/components/admin/AdminEconomic.tsx:                    <div key={`econ-tm-${team.id}-${index}`} className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-white">
+src/components/admin/AdminEconomic.tsx:    <tr key={`econ-tr-${team.id}`} className="hover:bg-slate-50 transition-colors">
+src/components/admin/AdminEconomic.tsx:                    {types.map(t => <option key={t} value={t}>{t}</option>)}
+src/components/admin/AdminEconomic.tsx:                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+src/components/admin/AdminEconomic.tsx:                <tr key={`ae-list-acc-in-${acc.id || 'no-id'}-${aIdx}`} className="hover:bg-emerald-50/30 transition-colors flex w-full items-center">
+src/components/admin/AdminEconomic.tsx:                <tr key={`ae-list-acc-out-${acc.id || 'no-id'}-${aIdx}`} className="hover:bg-rose-50/30 transition-colors flex w-full items-center">
+src/components/admin/AdminEconomic.tsx:                    <div key={tag} className={`flex items-center gap-2 px-3 py-1.5 ${style.bg} border ${style.border} rounded-lg shadow-sm`}>
+src/components/admin/AdminEconomic.tsx:                      <div key={venue} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-3 bg-slate-50 border border-slate-100 rounded-2xl">
+src/components/admin/AdminEconomic.tsx:              <div key={`budget-in-${acc.id}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 gap-4">
+src/components/admin/AdminEconomic.tsx:              <div key={`budget-out-${acc.id}`} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 gap-4">
+src/components/admin/AdminEconomic.tsx:                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+src/components/admin/AdminEconomic.tsx:                 <div key={idx} className="flex items-center justify-between text-xs">
+src/components/admin/AdminSeasons.tsx:          <div key={`sea-${s.id || 'no-id'}-${idx}`} className="border border-slate-200 p-4 rounded-xl flex items-center justify-between">
+src/components/admin/AdminSettlements.tsx:            key={view}
+src/components/admin/AdminSettlements.tsx:                        <tr key={`as-ref-${ref.id || 'no-id'}-${idx}`} className="hover:bg-slate-50 transition-colors group">
+src/components/admin/AdminSettlements.tsx:                        <tr key={field.name} className="hover:bg-slate-50 transition-colors group">
+src/components/admin/AdminSettlements.tsx:            <div key={`sa-team-${t.id}-${index}`} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-2xl">
+src/components/admin/AdminSettlements.tsx:                <tr key={`sa-tx-${t.id}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
+src/components/admin/AdminLayout.tsx:                  key={item.name}
+src/components/admin/AdminReferees.tsx:                  <option key={`opt-ref-${ref.id || 'no-id'}-${idx}`} value={ref.id}>{ref.name.toUpperCase()}</option>
+src/components/admin/AdminReferees.tsx:                  <tr key={`list-ref-${referee.id || 'no-id'}-${idx}`} className="hover:bg-slate-50/30 transition-all group">
+src/components/admin/AdminReferees.tsx:                                    <li key={`cv-${referee.id}-${i}`}>{campo}</li>
+src/components/admin/AdminReferees.tsx:                                    return <li key={`tv-${referee.id}-${i}`} className="break-words">{team ? team.name : teamId}</li>;
+src/components/admin/AdminReferees.tsx:                    <label key={`opt-camp-${idx}`} className="flex items-center gap-2 mb-1">
+src/components/admin/AdminReferees.tsx:                    <label key={`opt-team-${t.id || 'no-id'}-${idx}`} className="flex items-center gap-2 mb-1">
+src/components/admin/AdminReferees.tsx:                      <option key={`partner-${r.id}`} value={r.id}>{r.name}</option>
+src/components/admin/AdminReferees.tsx:                    <div key={dia} className="flex gap-2 items-center">
+src/components/admin/AdminVenues.tsx:          <div key={venue.id} className={`bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col transition-all ${!isActive ? 'opacity-80' : ''}`}>
+src/components/admin/AdminVenues.tsx:                    <div key={slot.day} className="flex">
+src/components/admin/AdminVenues.tsx:                          <span key={hour} className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-[10px] font-bold">
+src/components/admin/AdminVenues.tsx:                    <option key={v.id} value={v.id}>{v.name}</option>
+src/components/admin/AdminVenues.tsx:                      <div key={day} className="border border-slate-200 p-4 rounded-xl">
+src/components/admin/AdminVenues.tsx:                                key={hour}
+src/components/PublicCalendar.tsx:                      <option key={`pubcal-ref-${r.id || 'no-id'}-${idx}`} value={r.id}>{r.name}</option>
+src/components/PublicCalendar.tsx:                <div key={d} className="text-center text-[10px] font-black text-gray-400 py-2">{d}</div>
+src/components/PublicCalendar.tsx:                    key={day.toISOString()}
+src/components/PublicCalendar.tsx:                key={searchRefereeId || selectedDate?.toISOString()}
+src/components/PublicCalendar.tsx:                    <div key={`m-${match.id || 'no-id'}-${mi}`} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 group relative overflow-hidden">
+src/components/Login.tsx:          key="main"
+src/components/Login.tsx:                   key="selection-box"
+src/components/Login.tsx:                   key="admin-box"
+src/components/Login.tsx:                   key="referee-box"
+src/components/Login.tsx:                            <option key={`login-ref-${ref.id || 'no-id'}-${idx}`} value={ref.username}>{(ref.name || '').toUpperCase()}</option>
+src/components/referee/RefereeMatches.tsx:              <option key={`rm-per-${p.id || 'no-id'}-${idx}`} value={p.id}>{p.label}</option>
+src/components/referee/RefereeMatches.tsx:            <div key={date} className="space-y-2">
+src/components/referee/RefereeMatches.tsx:                        key={`${match.id || 'no-id'}-${mi}`}

@@ -57,7 +57,7 @@ const getIconColor = (name: string) => {
   }
 };
 
-const NavItem = ({ item, isMobile = false, setIsMobileMenuOpen, locationPathname, isSubItem = false }: NavItemProps) => {
+const NavItem: React.FC<NavItemProps> = ({ item, isMobile = false, setIsMobileMenuOpen, locationPathname, isSubItem = false }) => {
   const isActive = locationPathname === item.href || (locationPathname.startsWith(item.href) && item.href !== '/admin');
   const Icon = item.icon;
 
@@ -139,7 +139,7 @@ const NavGroup = ({ group, isMobile, setIsMobileMenuOpen, locationPathname }: an
 
 export default function AdminLayoutContainer({ children }: { children: React.ReactNode }) {
   const { logout, user } = useAuth();
-  const { settings } = useData();
+  const { settings, error: dataError } = useData();
   const { seasons, currentSeason, setCurrentSeason } = useSeason();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -404,6 +404,26 @@ export default function AdminLayoutContainer({ children }: { children: React.Rea
 
       {/* Main Content Area */}
       <main id="main-scroll-container" className="flex-grow min-w-0 flex flex-col h-screen overflow-y-auto bg-[#F8FAFC]">
+        {dataError && (
+          <div className="bg-red-100/80 border-b border-red-200 px-4 py-3 shrink-0">
+             <div className="max-w-7xl mx-auto flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                   <div className="p-2 bg-red-500 rounded-lg shrink-0">
+                      <AlertTriangle className="w-5 h-5 text-white" />
+                   </div>
+                   <div>
+                     <h3 className="text-sm font-bold text-red-900">Alerta de Datos</h3>
+                     <p className="text-xs text-red-700 font-medium">{dataError}</p>
+                     {(dataError.includes('quota') || dataError.includes('lecturas superado') || dataError.includes('resource-exhausted')) && (
+                        <p className="text-xs text-red-800 font-bold mt-1">
+                          Parece que has superado el límite de cuota gratuita en tu cuenta de Firebase. No te preocupes, los datos están a salvo, simplemente no se mostrarán ni actualizarán hasta mañana a las 09:00, o puedes actualizar la cuenta Firebase.
+                        </p>
+                     )}
+                   </div>
+                </div>
+             </div>
+          </div>
+        )}
         {showBackupReminder && (
           <div className="bg-amber-100/50 border-b border-amber-200 px-4 py-3 shrink-0">
              <div className="max-w-7xl mx-auto flex items-center justify-between">

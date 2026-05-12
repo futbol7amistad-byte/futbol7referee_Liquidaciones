@@ -24,12 +24,14 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
   
   // Inteligencia de Selección: Procesamos TODOS los partidos que estén sin árbitro real, o todos si se fuerza la reasignación
   const unassignedMatches = session.matches.filter(m => 
-    session.forceReassignAll ||
+    (session.forceReassignAll ||
     !m.referee_id || 
     m.referee_id === '' || 
     m.referee_id === 'r-unassigned' || 
     m.referee_id === 'SIN ASIGNAR' ||
-    m.referee_id === 'r-0'
+    m.referee_id === 'r-0') &&
+    m.status !== 'Suspendido' &&
+    m.status !== 'Aplazado'
   );
 
   const getRefereeMaxLoad = (ref: Referee): number => {
@@ -128,6 +130,7 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
     // Y SOLO si el partido está en el mismo rango de fechas que estamos asignando (carga semanal/periodo)
     if (m.referee_id && refereeLoad[m.referee_id] !== undefined && 
         m.referee_id !== 'r-unassigned' && m.referee_id !== 'SIN ASIGNAR' &&
+        m.status !== 'Suspendido' && m.status !== 'Aplazado' &&
         (!minDate || (m.match_date >= minDate && m.match_date <= maxDate))) {
       refereeLoad[m.referee_id]++;
       const mDayNorm = normalizeString(m.day_name || getDayName(m.match_date));
@@ -149,38 +152,44 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
     return groups[b].length - groups[a].length; // Descendente por tamaño de grupo
   });
 
-  for (const key of sortedGroupKeys) {
-    const groupMatches = groups[key].sort((a, b) => a.match_time.localeCompare(b.match_time));
-    const isSingleMatch = groupMatches.length === 1;
-    
-    // Intentar asignar el mismo árbitro a TODO el bloque del campo en ese día
-    let bestGroupRef: Referee | null = null;
-    let bestGroupScore = -Infinity;
+  const passes = [2, 4, Infinity];
+  let unassignedGroupKeys = [...sortedGroupKeys];
 
-    // Aleatorizar el orden de los árbitros para que no siempre gane el mismo si hay empate técnico
-    const randomizedReferees = shuffle(session.referees);
+  for (const maxLoadCap of passes) {
+    const nextUnassignedKeys: string[] = [];
 
-    for (const ref of randomizedReferees) {
-      if (ref.status !== 'active') continue;
+    for (const key of unassignedGroupKeys) {
+      const groupMatches = groups[key].sort((a, b) => a.match_time.localeCompare(b.match_time));
+      const isSingleMatch = groupMatches.length === 1;
       
-      const maxLoad = getRefereeMaxLoad(ref);
-      if (maxLoad <= 0) continue;
-      
-      const currentLoad = refereeLoad[ref.id];
-      const remainingLoad = maxLoad - currentLoad;
+      // Intentar asignar el mismo árbitro a TODO el bloque del campo en ese día
+      let bestGroupRef: Referee | null = null;
+      let bestGroupScore = -Infinity;
 
-      if (remainingLoad < groupMatches.length) continue;
+      // Aleatorizar el orden de los árbitros para que no siempre gane el mismo si hay empate técnico
+      const randomizedReferees = shuffle(session.referees);
+
+      for (const ref of randomizedReferees) {
+        if (ref.status !== 'active') continue;
+        
+        const maxLoad = getRefereeMaxLoad(ref);
+        if (maxLoad <= 0) continue;
+        
+        const currentLoad = refereeLoad[ref.id];
+        const remainingLoad = maxLoad - currentLoad;
+
+        if (remainingLoad < groupMatches.length) continue;
+        if (currentLoad + groupMatches.length > maxLoadCap) continue; // LOAD CAP ENFORCEMENT
 
       // Check daily max load for ALL matches in the group
       let dailyLoadOk = true;
-      for (const gm of groupMatches) {
-        const robustDayName = gm.day_name || getDayName(gm.match_date);
-        const mDay = normalizeString(robustDayName);
-        const maxDaily = getRefereeMaxDailyLoad(ref, robustDayName, gm.match_date);
-        const currentDaily = (refereeDailyLoad[ref.id][mDay] || 0);
-        if (currentDaily + 1 > maxDaily) { // Technically, a group might have multiple matches on the same day, so + 1 per match logic:
-            dailyLoadOk = false;
-        }
+      const robustDayName = groupMatches[0].day_name || getDayName(groupMatches[0].match_date);
+      const mDay = normalizeString(robustDayName);
+      const maxDaily = getRefereeMaxDailyLoad(ref, robustDayName, groupMatches[0].match_date);
+      const currentDaily = (refereeDailyLoad[ref.id][mDay] || 0);
+      
+      if (currentDaily + groupMatches.length > maxDaily) {
+          dailyLoadOk = false;
       }
       if (!dailyLoadOk) continue;
 
@@ -205,22 +214,25 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
              hadExplicitSlot = true;
           }
 
-          if (remainingDaily > 0 && remainingDaily % 2 !== 0) {
-              specialBonus += 500000000; // Prioridad absoluta a impares
-              if (hadExplicitSlot) {
-                  specialBonus += 900000000;
-              }
-              if (remainingDaily === 1) {
-                  specialBonus += 20000000; 
-              }
-          } else if (remainingDaily > 0 && remainingDaily % 2 === 0) {
-              // Si tiene horas pares disponibles en ESE DÍA (ej 2 horas), penalizamos duramente
+          // FIX: The user wants to avoid referees having an ODD number of matches assigned in a day/week.
+          const newDailyLoad = currentDaily + groupMatches.length;
+          const newTotalLoad = currentLoad + groupMatches.length;
+          
+          if (newDailyLoad > 0 && newDailyLoad % 2 === 0) {
+              specialBonus += 5000000000; // Prioridad MÁXIMA para terminar con un número PAR de horas el mismo día
+              if (hadExplicitSlot) specialBonus += 9000000000;
+          } else if (newTotalLoad > 0 && newTotalLoad % 2 === 0) {
+              specialBonus += 2000000000; // Prioridad ALTA para terminar con total semanal PAR
+          } else {
+              // Si el árbitro terminaría con un número IMPAR de horas, penalizar.
               specialBonus -= 100000000;
           }
 
-          // Si el árbitro tiene una carga MAXIMA impar (ej. 3 horas), NECESITA llevarse un partido suelto
-          if (maxLoad % 2 !== 0) specialBonus += 1000000;
+          if (remainingDaily === 1) {
+              specialBonus += 20000000; 
+          }
           
+          if (maxLoad % 2 !== 0) specialBonus += 1000000;
           specialBonus += 100;
       }
 
@@ -242,9 +254,14 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
         let totalScore = 0;
         groupMatches.forEach(m => totalScore += calculateScore(ref, m, session));
         
-        // Penalizar fuertemente carga RELATIVA para forzar distribución equitativa basada en su disponibilidad (porcentaje llenado)
+        // Equidad absoluta: todos deben llegar a 2, luego a 4, luego a 6...
+        // Restar una penalización fija muy grande por cada partido que ya tengan (currentLoad)
+        totalScore -= (Math.pow(currentLoad, 2) * 50000000);
+
+        // Penalizar también por carga RELATIVA para forzar distribución equitativa basada en su disponibilidad (porcentaje llenado)
         const loadPercentage = currentLoad / maxLoad;
         totalScore -= (loadPercentage * 100000);
+        
         totalScore += specialBonus;
         totalScore += getPartnerBonus(ref, groupMatches);
 
@@ -264,28 +281,35 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
           reason: isSingleMatch ? 'Partido Suelto' : 'Bloque de Campo' 
         });
         refereeLoad[bestGroupRef!.id]++;
-        const mDay = normalizeString(m.day_name);
+        const mDayRobust = m.day_name || getDayName(m.match_date) || 'Sin Dia';
+        const mDay = normalizeString(mDayRobust);
         refereeDailyLoad[bestGroupRef!.id][mDay] = (refereeDailyLoad[bestGroupRef!.id][mDay] || 0) + 1;
       });
     } else {
-      // Fallback: Individual si no se pudo el bloque de 2
-      for (const m of groupMatches) {
-        let bestRef: Referee | null = null;
-        let bestScore = -Infinity;
+        // Fallback: Individual si no se pudo el bloque de 2
+        let allAssignedInGroup = true;
+        
+        // Remove matches from group that we successfully assign individually 
+        const unassignedInThisGroup = [];
 
-        // Aleatorizar el orden de los árbitros para que no siempre gane el mismo
-        const randomizedRefsForIndividual = shuffle(session.referees);
+        for (const m of groupMatches) {
+          let bestRef: Referee | null = null;
+          let bestScore = -Infinity;
 
-        for (const ref of randomizedRefsForIndividual) {
-          if (ref.status !== 'active') continue;
-          
-          const maxLoad = getRefereeMaxLoad(ref);
-          if (maxLoad <= 0) continue;
-          
-          const currentLoad = refereeLoad[ref.id];
-          const remainingLoad = maxLoad - currentLoad;
+          // Aleatorizar el orden de los árbitros para que no siempre gane el mismo
+          const randomizedRefsForIndividual = shuffle(session.referees);
 
-          if (remainingLoad < 1) continue;
+          for (const ref of randomizedRefsForIndividual) {
+            if (ref.status !== 'active') continue;
+            
+            const maxLoad = getRefereeMaxLoad(ref);
+            if (maxLoad <= 0) continue;
+            
+            const currentLoad = refereeLoad[ref.id];
+            const remainingLoad = maxLoad - currentLoad;
+
+            if (remainingLoad < 1) continue;
+            if (currentLoad + 1 > maxLoadCap) continue; // LOAD CAP ENFORCEMENT
 
           const mDayRobust = m.day_name || getDayName(m.match_date);
           const mDay = normalizeString(mDayRobust);
@@ -304,6 +328,10 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
           if (!isRefereeAvailable(ref, m, session)) continue;
 
           let score = calculateScore(ref, m, session);
+          
+          // Equidad absoluta
+          score -= (Math.pow(currentLoad, 2) * 50000000);
+
           // Fuerte penalización por carga RELATIVA para asegurar reparto equitativo
           const loadPercentage = currentLoad / maxLoad;
           score -= (loadPercentage * 100000);
@@ -321,16 +349,22 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
              hadExplicitSlotFb = true;
           }
 
-          if (remainingDailyFb > 0 && remainingDailyFb % 2 !== 0) {
-              score += 500000000; // Prioridad absoluta
+          const newDailyLoadFb = currentDaily + 1;
+          const newTotalLoadFb = currentLoad + 1;
+
+          if (newDailyLoadFb > 0 && newDailyLoadFb % 2 === 0) {
+              score += 5000000000; // Prioridad absoluta para terminar con un número PAR de horas el mismo día
               if (hadExplicitSlotFb) {
-                  score += 900000000;
+                  score += 9000000000;
               }
-              if (remainingDailyFb === 1) {
-                  score += 20000000;
-              }
-          } else if (remainingDailyFb > 0 && remainingDailyFb % 2 === 0) {
-              score -= 100000000; // Penalización por romper bloque de horas pares
+          } else if (newTotalLoadFb > 0 && newTotalLoadFb % 2 === 0) {
+              score += 2000000000; // Prioridad alta para terminar con semana PAR
+          } else {
+              score -= 100000000; // Penalización por dejarle con número IMPAR
+          }
+
+          if (remainingDailyFb === 1) {
+              score += 20000000;
           }
 
           if (maxLoad % 2 !== 0) score += 1000000;
@@ -346,13 +380,34 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
         if (bestRef) {
           results.push({ matchId: m.id, refereeId: bestRef.id, score: bestScore, reason: 'Individual' });
           refereeLoad[bestRef.id]++;
-          const mDay = normalizeString(m.day_name);
+          const mDayRobust = m.day_name || getDayName(m.match_date) || 'Sin Dia';
+          const mDay = normalizeString(mDayRobust);
           refereeDailyLoad[bestRef.id][mDay] = (refereeDailyLoad[bestRef.id][mDay] || 0) + 1;
         } else {
-          results.push({ matchId: m.id, refereeId: null, score: 0, reason: 'No hay árbitro disponible' });
+          allAssignedInGroup = false;
+          unassignedInThisGroup.push(m);
         }
       }
+      
+      groups[key] = unassignedInThisGroup;
+
+      if (!allAssignedInGroup) {
+         nextUnassignedKeys.push(key);
+      }
     }
+  }
+  unassignedGroupKeys = nextUnassignedKeys;
+}
+
+// En este punto, si quedaron partidos en grupos[], los añadimos sin árbitro a results
+  for (const key of unassignedGroupKeys) {
+      const remainingMatches = groups[key];
+      for (const m of remainingMatches) {
+          // Asegurarnos de no duplicar si ya estaba en results
+          if (!results.some(r => r.matchId === m.id)) {
+              results.push({ matchId: m.id, refereeId: null, score: 0, reason: 'No hay árbitro disponible' });
+          }
+      }
   }
 
   // 3. FASE DE PERMUTAS (Swaps): Para esos partidos que se quedaron "SIN ASIGNAR"
@@ -506,6 +561,381 @@ export const runAutoAssignment = (session: AssignmentSession, seed: number = 0):
         refereeLoad[emergencyCandidate.id]++;
       }
     }
+  }
+
+  // 5. FASE DE REEQUILIBRIO PARIDAD DIARIA (Daily Parity Rebalancing)
+  // Intentar asegurar que todos los árbitros terminen con un total de horas PAR por DÍA.
+  const allDays = Array.from(new Set(session.matches.map(m => normalizeString(m.day_name || getDayName(m.match_date) || 'Sin Dia'))));
+  
+  for (const mDay of allDays) {
+      if (!mDay) continue;
+      let oddRefereesDaily = session.referees.filter(r => (refereeDailyLoad[r.id]?.[mDay] || 0) % 2 !== 0);
+      let attemptsDaily = 0;
+      
+      while (oddRefereesDaily.length >= 2 && attemptsDaily < 10) {
+          attemptsDaily++;
+          oddRefereesDaily.sort((a, b) => (refereeDailyLoad[b.id]?.[mDay] || 0) - (refereeDailyLoad[a.id]?.[mDay] || 0)); // Del de mayor al de menor
+          
+          let swapMade = false;
+          
+          for (let i = 0; i < oddRefereesDaily.length; i++) {
+              for (let j = oddRefereesDaily.length - 1; j > i; j--) {
+                  const donor = oddRefereesDaily[i];
+                  const receiver = oddRefereesDaily[j];
+                  
+                  // Intentamos mover un partido del donor al receiver, de ESE DÍA
+                  const donorMatchesOnDay = results.filter(r => {
+                      if (r.refereeId !== donor.id) return false;
+                      const rm = session.matches.find(m => m.id === r.matchId);
+                      return rm && normalizeString(rm.day_name || getDayName(rm.match_date) || 'Sin Dia') === mDay;
+                  });
+
+                  
+                  for (const dm of donorMatchesOnDay) {
+                      const match = session.matches.find(m => m.id === dm.matchId);
+                      if (!match) continue;
+                      
+                      // ¿Puede el receiver pillarlo?
+                      const matchDayRobust = match.day_name || getDayName(match.match_date);
+                      const maxDaily = getRefereeMaxDailyLoad(receiver, matchDayRobust, match.match_date);
+                      const currentDaily = (refereeDailyLoad[receiver.id][mDay] || 0);
+                      
+                      if (currentDaily + 1 > maxDaily) continue;
+                      if (refereeLoad[receiver.id] >= getRefereeMaxLoad(receiver)) continue;
+                      if (!isRefereeAvailable(receiver, match, session)) continue;
+                      
+                      const hasCollision = session.matches.some(sm => sm.referee_id === receiver.id && sm.match_date === match.match_date && sm.match_time === match.match_time) 
+                         || results.some(r => r.refereeId === receiver.id && session.matches.find(sm => sm.id === r.matchId)?.match_date === match.match_date && session.matches.find(sm => sm.id === r.matchId)?.match_time === match.match_time);
+                      
+                      if (!hasCollision) {
+                          dm.refereeId = receiver.id;
+                          dm.reason = `Daily Parity Rebalance (vía ${donor.name})`;
+                          refereeLoad[donor.id]--;
+                          refereeDailyLoad[donor.id][mDay]--;
+                          refereeLoad[receiver.id]++;
+                          refereeDailyLoad[receiver.id][mDay] = (refereeDailyLoad[receiver.id][mDay] || 0) + 1;
+                          swapMade = true;
+                          break;
+                      }
+                  }
+                  
+                  if (swapMade) break;
+
+                  // Al revés: intentar mover del receiver al donor
+                  const receiverMatchesOnDay = results.filter(r => {
+                      if (r.refereeId !== receiver.id) return false;
+                      const rm = session.matches.find(m => m.id === r.matchId);
+                      return rm && normalizeString(rm.day_name || getDayName(rm.match_date) || 'Sin Dia') === mDay;
+                  });
+                  
+                  for (const rm of receiverMatchesOnDay) {
+                      const match = session.matches.find(m => m.id === rm.matchId);
+                      if (!match) continue;
+                      
+                      const matchDayRobust = match.day_name || getDayName(match.match_date);
+                      const maxDaily = getRefereeMaxDailyLoad(donor, matchDayRobust, match.match_date);
+                      const currentDaily = (refereeDailyLoad[donor.id][mDay] || 0);
+                      
+                      if (currentDaily + 1 > maxDaily) continue;
+                      if (refereeLoad[donor.id] >= getRefereeMaxLoad(donor)) continue;
+                      if (!isRefereeAvailable(donor, match, session)) continue;
+                      
+                      const hasCollision = session.matches.some(sm => sm.referee_id === donor.id && sm.match_date === match.match_date && sm.match_time === match.match_time) 
+                         || results.some(r => r.refereeId === donor.id && session.matches.find(sm => sm.id === r.matchId)?.match_date === match.match_date && session.matches.find(sm => sm.id === r.matchId)?.match_time === match.match_time);
+                      
+                      if (!hasCollision) {
+                          rm.refereeId = donor.id;
+                          rm.reason = `Daily Parity Rebalance (vía ${receiver.name})`;
+                          refereeLoad[receiver.id]--;
+                          refereeDailyLoad[receiver.id][mDay]--;
+                          refereeLoad[donor.id]++;
+                          refereeDailyLoad[donor.id][mDay] = (refereeDailyLoad[donor.id][mDay] || 0) + 1;
+                          swapMade = true;
+                          break;
+                      }
+                  }
+                  
+                  if (swapMade) break;
+              }
+              if (swapMade) break;
+          }
+          
+          oddRefereesDaily = session.referees.filter(r => (refereeDailyLoad[r.id]?.[mDay] || 0) % 2 !== 0);
+      }
+  }
+
+  // 6. GLOBAL PARITY ENFORCEMENT
+  // Asegurar que, globalmente, los totales sean pares (salvo capacidad IMPAR inherente).
+  let oddGlobalRefs = session.referees.filter(r => refereeLoad[r.id] % 2 !== 0);
+  let globalAttempts = 0;
+  
+  while (oddGlobalRefs.length >= 2 && globalAttempts < 20) {
+      globalAttempts++;
+      // Ordenamos para que los árbitros con maxLoad IMPAR queden al final.
+      oddGlobalRefs.sort((a, b) => {
+          const aMaxOdd = getRefereeMaxLoad(a) % 2 !== 0 ? 1 : 0;
+          const bMaxOdd = getRefereeMaxLoad(b) % 2 !== 0 ? 1 : 0;
+          if (aMaxOdd !== bMaxOdd) {
+              return aMaxOdd - bMaxOdd; 
+          }
+          return refereeLoad[b.id] - refereeLoad[a.id];
+      });
+
+      let globalSwapMade = false;
+      
+      for (let i = 0; i < oddGlobalRefs.length; i++) {
+          for (let j = oddGlobalRefs.length - 1; j > i; j--) {
+              const donor = oddGlobalRefs[i];
+              const receiver = oddGlobalRefs[j];
+              
+              const donorMatches = results.filter(r => r.refereeId === donor.id);
+              
+              for (const dm of donorMatches) {
+                  const match = session.matches.find(m => m.id === dm.matchId);
+                  if (!match) continue;
+                  
+                  const matchDayRobust = match.day_name || getDayName(match.match_date) || 'Sin Dia';
+                  const mDay = normalizeString(matchDayRobust);
+                  const maxDaily = getRefereeMaxDailyLoad(receiver, matchDayRobust, match.match_date);
+                  const currentDaily = (refereeDailyLoad[receiver.id]?.[mDay] || 0);
+                  
+                  if (currentDaily + 1 > maxDaily) continue;
+                  if (refereeLoad[receiver.id] >= getRefereeMaxLoad(receiver)) continue;
+                  if (!isRefereeAvailable(receiver, match, session)) continue;
+                  
+                  const hasCollision = session.matches.some(sm => sm.referee_id === receiver.id && sm.match_date === match.match_date && sm.match_time === match.match_time) 
+                     || results.some(r => r.refereeId === receiver.id && session.matches.find(sm => sm.id === r.matchId)?.match_date === match.match_date && session.matches.find(sm => sm.id === r.matchId)?.match_time === match.match_time);
+                  
+                  if (!hasCollision) {
+                      dm.refereeId = receiver.id;
+                      dm.reason = `Global Parity Rebalance (vía ${donor.name})`;
+                      refereeLoad[donor.id]--;
+                      refereeDailyLoad[donor.id][mDay]--;
+                      refereeLoad[receiver.id]++;
+                      refereeDailyLoad[receiver.id][mDay] = (refereeDailyLoad[receiver.id][mDay] || 0) + 1;
+                      globalSwapMade = true;
+                      break;
+                  }
+              }
+              
+              if (globalSwapMade) break;
+
+              const receiverMatches = results.filter(r => r.refereeId === receiver.id);
+              for (const rm of receiverMatches) {
+                  const match = session.matches.find(m => m.id === rm.matchId);
+                  if (!match) continue;
+                  
+                  const matchDayRobust = match.day_name || getDayName(match.match_date) || 'Sin Dia';
+                  const mDay = normalizeString(matchDayRobust);
+                  const maxDaily = getRefereeMaxDailyLoad(donor, matchDayRobust, match.match_date);
+                  const currentDaily = (refereeDailyLoad[donor.id]?.[mDay] || 0);
+                  
+                  if (currentDaily + 1 > maxDaily) continue;
+                  if (refereeLoad[donor.id] >= getRefereeMaxLoad(donor)) continue;
+                  if (!isRefereeAvailable(donor, match, session)) continue;
+                  
+                  const hasCollision = session.matches.some(sm => sm.referee_id === donor.id && sm.match_date === match.match_date && sm.match_time === match.match_time) 
+                     || results.some(r => r.refereeId === donor.id && session.matches.find(sm => sm.id === r.matchId)?.match_date === match.match_date && session.matches.find(sm => sm.id === r.matchId)?.match_time === match.match_time);
+                  
+                  if (!hasCollision) {
+                      rm.refereeId = donor.id;
+                      rm.reason = `Global Parity Rebalance (vía ${receiver.name})`;
+                      refereeLoad[receiver.id]--;
+                      refereeDailyLoad[receiver.id][mDay]--;
+                      refereeLoad[donor.id]++;
+                      refereeDailyLoad[donor.id][mDay] = (refereeDailyLoad[donor.id][mDay] || 0) + 1;
+                      globalSwapMade = true;
+                      break;
+                  }
+              }
+              
+              if (globalSwapMade) break;
+          }
+          if (globalSwapMade) break;
+      }
+      
+      oddGlobalRefs = session.referees.filter(r => refereeLoad[r.id] % 2 !== 0);
+  }
+
+  // 7. DEEP DAILY PARITY ENFORCEMENT & CONSOLIDATION
+  // Reduce day-level odds (1 match/day) as much as possible for EVERY ref, 
+  // ESPECIALLY for refs whose global total is EVEN.
+  let consolidationMade = true;
+  let consolAttempts = 0;
+  while (consolidationMade && consolAttempts < 60) {
+      consolidationMade = false;
+      consolAttempts++;
+      
+      for (const day of allDays) {
+          const refsWithOddDay = session.referees.filter(r => (refereeDailyLoad[r.id]?.[day] || 0) % 2 !== 0);
+          
+          // If we have 2 refs with an odd day, we just pass one match from one to the other!
+          if (refsWithOddDay.length >= 2) {
+             const donor = refsWithOddDay[0];
+             const receiver = refsWithOddDay[1];
+             
+             const donorMatches = results.filter(r => r.refereeId === donor.id && normalizeString(session.matches.find(m => m.id === r.matchId)?.day_name || getDayName(session.matches.find(m => m.id === r.matchId)?.match_date || '') || 'Sin Dia') === day);
+             if (donorMatches.length === 0) continue;
+             
+             for (const dm of donorMatches) {
+                 const matchObj = session.matches.find(m => m.id === dm.matchId);
+                 if (!matchObj) continue;
+                 
+                 const maxDailyRec = getRefereeMaxDailyLoad(receiver, day, matchObj.match_date);
+                 if ((refereeDailyLoad[receiver.id][day] || 0) + 1 > maxDailyRec) continue;
+                 // Don't violate receiver's GLOBAL total unless they have a lot of space. 
+                 // Even if they exceed, we can try. But let's be strict:
+                 if (refereeLoad[receiver.id] + 1 > getRefereeMaxLoad(receiver)) continue;
+                 
+                 if (!isRefereeAvailable(receiver, matchObj, session)) continue;
+                 const hasCol = session.matches.some(sm => sm.referee_id === receiver.id && sm.match_date === matchObj.match_date && sm.match_time === matchObj.match_time) 
+                     || results.some(r => r.refereeId === receiver.id && session.matches.find(sm => sm.id === r.matchId)?.match_date === matchObj.match_date && session.matches.find(sm => sm.id === r.matchId)?.match_time === matchObj.match_time);
+                 if (hasCol) continue;
+                 
+                 dm.refereeId = receiver.id;
+                 dm.reason = `Agrupación impar ${day}`;
+                 refereeLoad[donor.id]--; refereeDailyLoad[donor.id][day]--;
+                 refereeLoad[receiver.id]++; refereeDailyLoad[receiver.id][day]++;
+                 consolidationMade = true;
+                 break;
+             }
+          }
+      }
+      
+      // Now ensure referees with EVEN global totals don't have scattered 1s (e.g. 1 on Martes, 1 on Jueves = 2)
+      if (!consolidationMade) {
+          for (const ref of session.referees) {
+              if (refereeLoad[ref.id] % 2 !== 0) continue; // Sólo árbitros con total PAR
+              
+              const myOddDays = allDays.filter(d => (refereeDailyLoad[ref.id]?.[d] || 0) % 2 !== 0);
+              if (myOddDays.length < 2) continue; // ej. [Martes, Jueves]
+              
+              const dayFrom = myOddDays[0];
+              const dayTo = myOddDays[1];
+              const myMatchesFrom = results.filter(r => r.refereeId === ref.id && normalizeString(session.matches.find(m => m.id === r.matchId)?.day_name || getDayName(session.matches.find(m => m.id === r.matchId)?.match_date || '') || 'Sin Dia') === dayFrom);
+              
+              if (myMatchesFrom.length === 0) continue;
+              
+              for (const otherRef of session.referees) {
+                  if (otherRef.id === ref.id) continue;
+                  
+                  const otherMatchesTo = results.filter(r => r.refereeId === otherRef.id && normalizeString(session.matches.find(m => m.id === r.matchId)?.day_name || getDayName(session.matches.find(m => m.id === r.matchId)?.match_date || '') || 'Sin Dia') === dayTo);
+                  if (otherMatchesTo.length === 0) continue;
+                  
+                  for (const matchToSteal of otherMatchesTo) {
+                      const mStealObj = session.matches.find(m => m.id === matchToSteal.matchId);
+                      const mGiveObj = session.matches.find(m => m.id === myMatchesFrom[0].matchId);
+                      if (!mStealObj || !mGiveObj) continue;
+                      
+                      const maxDailyTo_ref = getRefereeMaxDailyLoad(ref, dayTo, mStealObj.match_date);
+                      if ((refereeDailyLoad[ref.id][dayTo] || 0) + 1 > maxDailyTo_ref) continue;
+                      if (!isRefereeAvailable(ref, mStealObj, session)) continue;
+                      const colRef = session.matches.some(sm => sm.referee_id === ref.id && sm.match_date === mStealObj.match_date && sm.match_time === mStealObj.match_time) 
+                         || results.some(r => r.refereeId === ref.id && r.matchId !== myMatchesFrom[0].matchId && session.matches.find(sm => sm.id === r.matchId)?.match_date === mStealObj.match_date && session.matches.find(sm => sm.id === r.matchId)?.match_time === mStealObj.match_time);
+                      if (colRef) continue;
+                      
+                      const maxDailyFrom_other = getRefereeMaxDailyLoad(otherRef, dayFrom, mGiveObj.match_date);
+                      if ((refereeDailyLoad[otherRef.id][dayFrom] || 0) + 1 > maxDailyFrom_other) continue;
+                      if (!isRefereeAvailable(otherRef, mGiveObj, session)) continue;
+                      const colOther = session.matches.some(sm => sm.referee_id === otherRef.id && sm.match_date === mGiveObj.match_date && sm.match_time === mGiveObj.match_time) 
+                         || results.some(r => r.refereeId === otherRef.id && r.matchId !== matchToSteal.matchId && session.matches.find(sm => sm.id === r.matchId)?.match_date === mGiveObj.match_date && session.matches.find(sm => sm.id === r.matchId)?.match_time === mGiveObj.match_time);
+                      if (colOther) continue;
+                      
+                      const oddBefore = allDays.filter(d => (refereeDailyLoad[otherRef.id]?.[d] || 0) % 2 !== 0).length;
+                      let simDFrom = (refereeDailyLoad[otherRef.id][dayFrom] || 0) + 1;
+                      let simDTo = (refereeDailyLoad[otherRef.id][dayTo] || 0) - 1;
+                      let oddAfter = oddBefore;
+                      if ((refereeDailyLoad[otherRef.id][dayFrom] || 0) % 2 !== 0 && simDFrom % 2 === 0) oddAfter--;
+                      if ((refereeDailyLoad[otherRef.id][dayFrom] || 0) % 2 === 0 && simDFrom % 2 !== 0) oddAfter++;
+                      if ((refereeDailyLoad[otherRef.id][dayTo] || 0) % 2 !== 0 && simDTo % 2 === 0) oddAfter--;
+                      if ((refereeDailyLoad[otherRef.id][dayTo] || 0) % 2 === 0 && simDTo % 2 !== 0) oddAfter++;
+                      
+                      if (refereeLoad[otherRef.id] % 2 === 0 && oddAfter > oddBefore) continue; // No romper a otro PAR
+                      if (refereeLoad[otherRef.id] % 2 !== 0 && oddAfter > oddBefore + 1) continue; 
+                      
+                      myMatchesFrom[0].refereeId = otherRef.id;
+                      myMatchesFrom[0].reason = `Cross consolidación para evitar 1s a ${ref.name}`;
+                      matchToSteal.refereeId = ref.id;
+                      matchToSteal.reason = `Cross consolidación para evitar 1s a ${ref.name}`;
+                      
+                      refereeDailyLoad[ref.id][dayFrom]--; refereeDailyLoad[ref.id][dayTo]++;
+                      refereeDailyLoad[otherRef.id][dayFrom]++; refereeDailyLoad[otherRef.id][dayTo]--;
+                      
+                      consolidationMade = true;
+                      break;
+                  }
+                  if (consolidationMade) break;
+              }
+              if (consolidationMade) break;
+          }
+      }
+  }
+
+  // 7.5 MACRO GLOBAL BALANCE ENFORCEMENT
+  // Prevent some users from having 6 while others have 2 if at all possible.
+  let macroBalanceMade = true;
+  let macroAttempts = 0;
+  while (macroBalanceMade && macroAttempts < 10) {
+      macroBalanceMade = false;
+      macroAttempts++;
+      
+      const activeLoad = session.referees.filter(r => r.status === 'active').map(r => ({ ref: r, load: refereeLoad[r.id] }));
+      activeLoad.sort((a,b) => b.load - a.load);
+      
+      const highestLog = activeLoad[0];
+      const lowestLog = activeLoad[activeLoad.length - 1];
+      
+      if (highestLog.load - lowestLog.load >= 4) {
+          // Try to migrate 2 matches from highest to lowest.
+          const highRef = highestLog.ref;
+          const lowRef = lowestLog.ref;
+          
+          if (refereeLoad[lowRef.id] + 2 > getRefereeMaxLoad(lowRef)) break;
+          
+          const highMatches = results.filter(r => r.refereeId === highRef.id);
+          const daysForHigh = [...new Set(highMatches.map(r => normalizeString(session.matches.find(m => m.id === r.matchId)?.day_name || getDayName(session.matches.find(m => m.id === r.matchId)?.match_date || '') || 'Sin Dia')))];
+          
+          for (const day of daysForHigh) {
+              const myDayMatches = highMatches.filter(r => normalizeString(session.matches.find(m => m.id === r.matchId)?.day_name || getDayName(session.matches.find(m => m.id === r.matchId)?.match_date || '') || 'Sin Dia') === day);
+              
+              if (myDayMatches.length >= 2) {
+                  // Try to transfer these 2 matches to lowRef
+                  const match1Record = myDayMatches[0];
+                  const match2Record = myDayMatches[1];
+                  const m1Obj = session.matches.find(m => m.id === match1Record.matchId)!;
+                  const m2Obj = session.matches.find(m => m.id === match2Record.matchId)!;
+                  
+                  const rDayRobust = m1Obj.day_name || getDayName(m1Obj.match_date);
+                  const maxDaily = getRefereeMaxDailyLoad(lowRef, rDayRobust, m1Obj.match_date);
+                  const currentDaily = (refereeDailyLoad[lowRef.id][day] || 0);
+                  
+                  if (currentDaily + 2 > maxDaily) continue;
+                  if (!isRefereeAvailable(lowRef, m1Obj, session) || !isRefereeAvailable(lowRef, m2Obj, session)) continue;
+                  
+                  const hasCollision = session.matches.some(sm => sm.referee_id === lowRef.id && (
+                     (sm.match_date === m1Obj.match_date && sm.match_time === m1Obj.match_time) ||
+                     (sm.match_date === m2Obj.match_date && sm.match_time === m2Obj.match_time)
+                  )) || results.some(r => r.refereeId === lowRef.id && (
+                     (session.matches.find(sm => sm.id === r.matchId)?.match_date === m1Obj.match_date && session.matches.find(sm => sm.id === r.matchId)?.match_time === m1Obj.match_time) ||
+                     (session.matches.find(sm => sm.id === r.matchId)?.match_date === m2Obj.match_date && session.matches.find(sm => sm.id === r.matchId)?.match_time === m2Obj.match_time)
+                  ));
+                  
+                  if (!hasCollision) {
+                      match1Record.refereeId = lowRef.id;
+                      match1Record.reason = `Macro Balance (-2 de ${highRef.name})`;
+                      match2Record.refereeId = lowRef.id;
+                      match2Record.reason = `Macro Balance (-2 de ${highRef.name})`;
+                      
+                      refereeLoad[highRef.id] -= 2;
+                      refereeDailyLoad[highRef.id][day] -= 2;
+                      refereeLoad[lowRef.id] += 2;
+                      refereeDailyLoad[lowRef.id][day] += 2;
+                      macroBalanceMade = true;
+                      break;
+                  }
+              }
+          }
+      }
   }
 
   return results;
